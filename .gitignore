@@ -1,0 +1,82 @@
+# ─── Python ─────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.eggs/
+build/
+dist/
+*.egg
+.venv/
+venv/
+ENV/
+env/
+pip-wheel-metadata/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ─── Node / Next.js ───────────────────────────────────────
+node_modules/
+apps/web/.next/
+apps/web/out/
+apps/web/dist/
+apps/web/.turbo/
+*.tsbuildinfo
+next-env.d.ts
+.npm/
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# ─── Env / secrets ────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ─── Databases / local data ───────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+data/
+pgdata/
+dump.rdb
+
+# ─── OS ───────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ─── IDEs / editors ───────────────────────────────────────
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ─── Docker / infra local ─────────────────────────────────
+.docker/
+infra/*.tfstate
+infra/*.tfstate.backup
+infra/.terraform/
+
+# ─── Logs / temp ──────────────────────────────────────────
+logs/
+*.log
+tmp/
+temp/

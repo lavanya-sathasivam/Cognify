@@ -1,0 +1,58 @@
+name: cognify
+
+services:
+  core-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: core-backend
+        SERVICE_PORT: 8000
+    ports:
+      - "${CORE_BACKEND_PORT:-8000}:8000"
+    env_file:
+      - .env
+    environment:
+      PORT: 8000
+    depends_on: []
+
+  ai-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: ai-service
+        SERVICE_PORT: 8001
+    ports:
+      - "${AI_SERVICE_PORT:-8001}:8001"
+    env_file:
+      - .env
+    environment:
+      PORT: 8001
+
+  execution-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: execution-service
+        SERVICE_PORT: 8002
+    ports:
+      - "${EXECUTION_SERVICE_PORT:-8002}:8002"
+    env_file:
+      - .env
+    environment:
+      PORT: 8002
+
+  web:
+    image: node:22-alpine
+    working_dir: /code
+    volumes:
+      - ./apps/web:/code
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    command: ["sh", "-c", "npm install && npm run dev -- --port 3000 --hostname 0.0.0.0"]
+    depends_on:
+      - core-backend
+      - ai-service
+      - execution-service
