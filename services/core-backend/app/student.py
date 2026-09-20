@@ -137,8 +137,7 @@ _GROUP_BY_CONCEPT: dict[str, str] = {
     cid: group for group, members in CONCEPT_GROUPS for cid in members
 }
 
-_RULE_PREFIX_RE = re.compile(r"^Rule [A-Z0-9_]+:\s*")
-# Bank descriptions occasionally name the misconception they probe
+_RULE_PREFIX_RE = re.compile(r"^Rule [A-Z0-9_]+:\s*")# Bank descriptions occasionally name the misconception they probe
 # (e.g. "...probe for C3-M05..."). The catalog is student-facing, so those
 # internal IDs are redacted the same way the frontend strips codes
 # (see apps/web/src/app/lib/copy.ts stripCodes): meaning preserved,
@@ -150,6 +149,90 @@ def _safe_description(text: Any) -> Any:
     if isinstance(text, str) and _MISCONCEPTION_ID_RE.search(text):
         return _MISCONCEPTION_ID_RE.sub("this idea", text)
     return text
+
+
+def _hidden_test_ids(problem: Problem) -> set[str]:
+    """IDs of the problem's hidden tests (never student-visible values)."""
+    try:
+        ids = {t.id for t in problem.hidden_tests}
+    except (AttributeError, TypeError):
+        return set()
+    return {i for i in ids if isinstance(i, str)}
+
+
+def _redact_hidden_decisive_values(
+    text: Any,
+    *,
+    test_id: str | None,
+    expected: str | None,
+    actual: str | None,
+) -> Any:
+    """Hide hidden-test values from student-facing prose (presentation only).
+
+    Rule explanations and intervention actions embed the decisive test's
+    expected/observed values in fixed template clauses (ai-service
+    rules.py / interventions.py). When the decisive test is hidden those
+    values must not reach students — the same contract ``to_student_view``
+    enforces for execution output. Replacement is literal on the exact
+    known values (never fuzzy number matching), so public-decisive text
+    is returned byte-identical. Non-string input passes through untouched.
+    """
+    if not isinstance(text, str) or not text:
+        return text
+    if not isinstance(test_id, str) or not test_id:
+        return text
+    if not isinstance(expected, str) or not isinstance(actual, str):
+        return text
+    # Rule explanations embed the PARSED integers (trailing newlines
+    # stripped) while intervention actions repr() the raw pack values, so
+    # redact both the raw and the stripped spellings of each value.
+    pairs = {(expected, actual), (expected.strip(), actual.strip())}
+    redacted = text
+    for exp, act in pairs:
+        redacted = redacted.replace(
+            f"(decisive {test_id}: expected {exp}, got {act})",
+            "(decisive hidden test: output differed by exactly one)",
+        )
+        redacted = re.sub(
+            r"\(decisive " + re.escape(test_id) + r": n=[^,]*, expected "
+            + re.escape(exp) + r", got " + re.escape(act) + r"\)",
+            "(decisive hidden test: the terminal value was dropped)",
+            redacted,
+        )
+        redacted = redacted.replace(
+            f"decisive test {test_id} (expected {exp!r}, observed {act!r})",
+            "a hidden test (details withheld)",
+        )
+        redacted = redacted.replace(
+            f"decisive test {test_id} expected {exp!r} but observed {act!r}",
+            "a hidden test produced an unexpected result",
+        )
+    return redacted
+
+
+def _hidden_redaction_args(problem: Problem, pack: Any) -> dict[str, Any]:
+    """Redaction kwargs for the student views (empty when decisive is public).
+
+    Values come from the pack's decisive failed test — the exact source the
+    rule explanations and intervention actions embed — so literal redaction
+    always matches. Returns ``{}`` when there is nothing hidden to
+    protect, keeping public-decisive output byte-identical.
+    """
+    failed_test_id = getattr(pack, "failed_test_id", None)
+    if failed_test_id is None or failed_test_id not in _hidden_test_ids(problem):
+        return {}
+    tests = getattr(pack, "failed_tests", []) or []
+    decisive = tests[0] if tests else None
+    expected = getattr(decisive, "expected_output", None)
+    actual = getattr(decisive, "actual_output", None)
+    if not isinstance(expected, str) or not isinstance(actual, str):
+        return {}
+    return {
+        "hide_decisive_values": True,
+        "decisive_test_id": failed_test_id,
+        "decisive_expected": expected,
+        "decisive_actual": actual,
+    }
 
 # Static student-facing copy per intervention type (presentation only; the
 # structured Step 15 contract carries the real content and the frontend
@@ -376,12 +459,33 @@ def _confidence_label(confidence: float) -> str:
     return "uncertain"
 
 
-def diagnosis_view(diagnosis: Any, failed_test_id: str | None) -> dict[str, Any] | None:
-    """Student-safe diagnosis (rule-ID prefix stripped, certainty labeled)."""
+def diagnosis_view(
+    diagnosis: Any,
+    failed_test_id: str | None,
+    *,
+    hide_decisive_values: bool = False,
+    decisive_test_id: str | None = None,
+    decisive_expected: str | None = None,
+    decisive_actual: str | None = None,
+) -> dict[str, Any] | None:
+    """Student-safe diagnosis (rule-ID prefix stripped, certainty labeled).
+
+    When ``hide_decisive_values`` is set (decisive test is hidden), the
+    decisive test's expected/observed values are redacted from the
+    explanation prose; the diagnosis itself (misconception, confidence,
+    evidence refs) is preserved unchanged.
+    """
     if diagnosis is None:
         return None
     raw_explanation = str(diagnosis.explanation)
     cleaned = _RULE_PREFIX_RE.sub("", raw_explanation).strip() or raw_explanation
+    if hide_decisive_values:
+        cleaned = _redact_hidden_decisive_values(
+            cleaned,
+            test_id=decisive_test_id,
+            expected=decisive_expected,
+            actual=decisive_actual,
+        )
     confidence = float(diagnosis.confidence)
     return {
         "misconception_id": diagnosis.misconception_id,
@@ -395,11 +499,25 @@ def diagnosis_view(diagnosis: Any, failed_test_id: str | None) -> dict[str, Any]
     }
 
 
-def intervention_view(intervention: Any) -> dict[str, Any] | None:
+def intervention_view(
+    intervention: Any,
+    *,
+    hide_decisive_values: bool = False,
+    decisive_test_id: str | None = None,
+    decisive_expected: str | None = None,
+    decisive_actual: str | None = None,
+) -> dict[str, Any] | None:
     if intervention is None:
         return None
     body = intervention.to_dict()
     body["student_message"] = INTERVENTION_COPY.get(body["intervention_type"], "")
+    if hide_decisive_values:
+        body["recommended_action"] = _redact_hidden_decisive_values(
+            body.get("recommended_action"),
+            test_id=decisive_test_id,
+            expected=decisive_expected,
+            actual=decisive_actual,
+        )
     return body
 
 
@@ -874,14 +992,19 @@ def create_student_router(
                 record.recommendations = recommendations
                 db_session.commit()
                 state = _journey_state(db_session, record)
+                # Hidden-decisive guard: rule/intervention prose embeds the
+                # pack's decisive values; hidden ones must not reach students.
+                redact = _hidden_redaction_args(problem, pack)
                 return {
                     "session_id": body.session_id,
                     "problem_id": problem.problem_id,
                     "variant_role": role,
                     "outcome": status,
                     "execution": exec_view,
-                    "diagnosis": diagnosis_view(diagnosis, pack.failed_test_id),
-                    "intervention": intervention_view(intervention),
+                    "diagnosis": diagnosis_view(
+                        diagnosis, pack.failed_test_id, **redact
+                    ),
+                    "intervention": intervention_view(intervention, **redact),
                     "recommendations": recommendations,
                     "transfer_available": False,
                     "transfer_problem": None,
