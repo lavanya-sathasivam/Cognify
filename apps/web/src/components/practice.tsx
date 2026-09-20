@@ -277,6 +277,16 @@ function FailedFeedback({
       {result.intervention && (
         <InterventionCard intervention={result.intervention} />
       )}
+      {result.recommendations.length > 0 && (
+        <div className="mt-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+          <h3 className="text-sm font-medium">What Cognify suggests next</h3>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+            Based on this attempt — retry the problem first, then follow the
+            suggestion below.
+          </p>
+          <RecommendationList recommendations={result.recommendations} />
+        </div>
+      )}
       <SecondaryButton onClick={onRetry} className="mt-4">
         Retry
       </SecondaryButton>

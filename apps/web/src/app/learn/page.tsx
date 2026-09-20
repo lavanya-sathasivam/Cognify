@@ -21,7 +21,13 @@ import {
   SecondaryButton,
 } from "../../components/ui";
 import { api, friendlyError, type ConceptsResponse } from "../lib/api";
-import { trendLabel } from "../lib/copy";
+import {
+  hintRelianceCopy,
+  masteryMeaning,
+  transferCopy,
+  trendLabel,
+  trendSentence,
+} from "../lib/copy";
 
 type LoadState =
   | { kind: "loading" }
@@ -153,6 +159,35 @@ export default function LearnPage() {
                         {recent.length > 0 &&
                           ` · ${passed} of ${recent.length} recent correct`}
                       </p>
+                      {masteryMeaning(concept.band) && (
+                        <p>{masteryMeaning(concept.band)}</p>
+                      )}
+                      {trendSentence(concept.trend) && (
+                        <p>{trendSentence(concept.trend)}</p>
+                      )}
+                      <p>
+                        {transferCopy(
+                          concept.transfer.attempts,
+                          concept.transfer.successes,
+                        )}
+                      </p>
+                      <p>
+                        {hintRelianceCopy(
+                          concept.hint_dependence,
+                          concept.hint_count,
+                        )}
+                      </p>
+                      {concept.active_misconception_count > 0 ? (
+                        <p>
+                          {concept.active_misconception_count}{" "}
+                          {concept.active_misconception_count === 1
+                            ? "area needs"
+                            : "areas need"}{" "}
+                          more practice — follow your recommended next step.
+                        </p>
+                      ) : (
+                        <p>No active weak areas right now.</p>
+                      )}
                       <p>
                         <Link
                           href="/practice"

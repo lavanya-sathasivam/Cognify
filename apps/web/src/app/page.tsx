@@ -112,6 +112,9 @@ export default function HomePage() {
         problem_title: backendNext.problem_title,
       }
     : (journey?.recommendations?.[0] ?? null);
+  const focusTitle = backendNext?.concept_id
+    ? (concepts?.concepts ?? []).find((c) => c.concept_id === backendNext.concept_id)?.title ?? null
+    : null;
   const started = (concepts?.concepts ?? []).filter(
     (c) => c.status === "started",
   );
@@ -188,7 +191,7 @@ export default function HomePage() {
       )}
 
       {next ? (
-        <NextStepCard recommendation={next} />
+        <NextStepCard recommendation={next} conceptTitle={focusTitle} />
       ) : (
         <Card label="Recommended next">
           <h2 className="text-base font-semibold">No recommendation yet</h2>

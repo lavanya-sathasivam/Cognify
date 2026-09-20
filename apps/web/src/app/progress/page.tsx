@@ -9,6 +9,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { NextStepCard } from "../../components/cards";
 import {
   Alert,
@@ -20,12 +21,20 @@ import {
   SecondaryButton,
 } from "../../components/ui";
 import { useSession } from "../../components/session";
-import { api, friendlyError, type ConceptsResponse } from "../lib/api";
+import {
+  api,
+  friendlyError,
+  type ConceptsResponse,
+  type HistoryResponse,
+} from "../lib/api";
 import {
   hintRelianceCopy,
   isDebugMode,
+  masteryMeaning,
+  outcomeLabel,
   transferCopy,
   trendLabel,
+  trendSentence,
 } from "../lib/copy";
 
 type LoadState =
@@ -36,6 +45,7 @@ type LoadState =
 export default function ProgressPage() {
   const { status, sessionId } = useSession();
   const [state, setState] = useState<LoadState>({ kind: "loading" });
+  const [history, setHistory] = useState<HistoryResponse | null>(null);
 
   useEffect(() => {
     if (status !== "ready" || !sessionId) return;
@@ -50,6 +60,15 @@ export default function ProgressPage() {
       .catch((err: unknown) => {
         if (!cancelled) setState({ kind: "failed", error: friendlyError(err) });
       });
+    // Best-effort recent activity: the dashboard works without it.
+    api.getHistory(sessionId, 5).then(
+      (data) => {
+        if (!cancelled) setHistory(data);
+      },
+      () => {
+        /* dashboard still answers from concept state */
+      },
+    );
     return () => {
       cancelled = true;
     };
@@ -92,6 +111,14 @@ export default function ProgressPage() {
   const concepts = state.data.concepts;
   const started = concepts.filter((c) => c.status === "started");
   const next = state.data.next_action;
+  const focus =
+    next?.concept_id != null
+      ? (concepts.find((c) => c.concept_id === next.concept_id) ?? null)
+      : null;
+  const weakCount = started.filter(
+    (c) => c.active_misconception_count > 0,
+  ).length;
+  const recentActivity = (history?.items ?? []).slice(-3).reverse();
 
   return (
     <div className="flex max-w-3xl flex-col gap-6">
@@ -99,6 +126,76 @@ export default function ProgressPage() {
         title="Your progress"
         intro="What you've practiced, where you stand, and what to do next — based only on your actual attempts."
       />
+
+      <Card label="Learning snapshot">
+        <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          Overall learning state
+        </p>
+        {started.length === 0 ? (
+          <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+            Start practicing to build your learning profile. Nothing here is
+            made up — your state will appear once you submit your first
+            solution.
+          </p>
+        ) : (
+          <div className="mt-2 flex flex-col gap-1 text-sm text-zinc-600 dark:text-zinc-300">
+            <p>
+              You&apos;ve started {started.length} of {concepts.length}{" "}
+              concepts.
+            </p>
+            {focus && (
+              <p>
+                Current focus:{" "}
+                <span className="font-medium">{focus.title}</span>{" "}
+                <Link
+                  href="/practice"
+                  className="font-medium text-teal-800 underline underline-offset-2 dark:text-teal-200"
+                >
+                  Practice it
+                </Link>
+              </p>
+            )}
+            {focus && trendSentence(focus.trend) && (
+              <p>{trendSentence(focus.trend)}</p>
+            )}
+            {weakCount > 0 && (
+              <p>
+                {weakCount} of your started{" "}
+                {started.length === 1 ? "concept has" : "concepts have"} areas
+                needing more practice.
+              </p>
+            )}
+          </div>
+        )}
+      </Card>
+
+      {recentActivity.length > 0 && (
+        <Card label="Recent learning activity">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            Recent learning activity
+          </p>
+          <ul className="mt-2 flex flex-col gap-1 text-sm">
+            {recentActivity.map((item) => (
+              <li key={item.order}>
+                <span className="font-medium">
+                  {item.problem_title ?? "Problem"}
+                </span>{" "}
+                <span className="text-zinc-600 dark:text-zinc-300">
+                  — {outcomeLabel(item.outcome, item.verified)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-sm">
+            <Link
+              href="/history"
+              className="font-medium text-teal-800 underline underline-offset-2 dark:text-teal-200"
+            >
+              What have I done? See full history
+            </Link>
+          </p>
+        </Card>
+      )}
 
       {started.length === 0 ? (
         <EmptyState
@@ -116,22 +213,32 @@ export default function ProgressPage() {
                   <LevelLabel band={concept.band} />
                 </div>
                 <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-                  <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
-                    <dt className="text-zinc-500 dark:text-zinc-400">
-                      Current level
-                    </dt>
-                    <dd className="mt-0.5 font-medium">
-                      {concept.mastery_claim
-                        ? "Strong — concept mastered"
-                        : "Not yet mastered — keep practicing"}
+                <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
+                  <dt className="text-zinc-500 dark:text-zinc-400">
+                    Current level
+                  </dt>
+                  <dd className="mt-0.5 font-medium">
+                    {concept.mastery_claim
+                      ? "Strong — concept mastered"
+                      : "Not yet mastered — keep practicing"}
+                  </dd>
+                  {masteryMeaning(concept.band) && (
+                    <dd className="mt-1 text-zinc-600 dark:text-zinc-300">
+                      {masteryMeaning(concept.band)}
                     </dd>
-                  </div>
-                  <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
-                    <dt className="text-zinc-500 dark:text-zinc-400">Trend</dt>
-                    <dd className="mt-0.5 font-medium">
-                      {trendLabel(concept.trend)}
+                  )}
+                </div>
+                <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
+                  <dt className="text-zinc-500 dark:text-zinc-400">Trend</dt>
+                  <dd className="mt-0.5 font-medium">
+                    {trendLabel(concept.trend)}
+                  </dd>
+                  {trendSentence(concept.trend) && (
+                    <dd className="mt-1 text-zinc-600 dark:text-zinc-300">
+                      {trendSentence(concept.trend)}
                     </dd>
-                  </div>
+                  )}
+                </div>
                   <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
                     <dt className="text-zinc-500 dark:text-zinc-400">
                       Attempts
@@ -186,6 +293,7 @@ export default function ProgressPage() {
             problem_id: next.problem_id,
             problem_title: next.problem_title,
           }}
+          conceptTitle={focus?.title ?? null}
         />
       )}
       <section aria-label="Not started">

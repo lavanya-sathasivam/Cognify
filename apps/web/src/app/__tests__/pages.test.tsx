@@ -375,3 +375,110 @@ test("history shows attempt order and execution results without raw codes", asyn
   expect(screen.queryByText("FAILED")).toBeNull();
   expect(screen.queryByText("PASSED")).toBeNull();
 });
+
+test("learn shows full real concept state without engine values", async () => {
+  vi.stubGlobal("fetch", mockFetch(conceptRoutes()));
+  render(
+    <SessionProvider>
+      <LearnPage />
+    </SessionProvider>,
+  );
+  expect(await screen.findByText(/Building confidence/)).toBeDefined();
+  expect(
+    await screen.findByText("Your recent performance is stable."),
+  ).toBeDefined();
+  expect(await screen.findByText(/No transfer attempts yet/)).toBeDefined();
+  expect(await screen.findByText(/Working independently/)).toBeDefined();
+  expect(
+    await screen.findByText(/No active weak areas right now/),
+  ).toBeDefined();
+  expect(screen.queryByText(/C[1-8]-M\d{2}/)).toBeNull();
+});
+
+test("learn flags concepts that need more practice", async () => {
+  vi.stubGlobal(
+    "fetch",
+    mockFetch({
+      "POST /student/sessions": sessionPayload(),
+      "GET /student/concepts?session_id=sess-pages": conceptsPayload({
+        ...C3_STARTED,
+        active_misconception_count: 2,
+      }),
+    }),
+  );
+  render(
+    <SessionProvider>
+      <LearnPage />
+    </SessionProvider>,
+  );
+  expect(await screen.findByText(/2 areas need/)).toBeDefined();
+  expect(screen.queryByText(/C[1-8]-M\d{2}/)).toBeNull();
+});
+
+test("progress snapshot shows focus and recent activity", async () => {
+  vi.stubGlobal(
+    "fetch",
+    mockFetch({
+      ...conceptRoutes(),
+      "GET /student/history?session_id=sess-pages&limit=5": {
+        session_id: "sess-pages",
+        total: 2,
+        limit: 5,
+        items: historyPayload().items,
+      },
+    }),
+  );
+  render(
+    <SessionProvider>
+      <ProgressPage />
+    </SessionProvider>,
+  );
+  expect(await screen.findByText("Overall learning state")).toBeDefined();
+  expect(
+    await screen.findByText(/You've started 1 of 8 concepts/),
+  ).toBeDefined();
+  // Focus appears in both the snapshot and the next-step card.
+  expect((await screen.findAllByText(/Current focus:/)).length).toBe(2);
+  expect(
+    (await screen.findAllByText("Loops & Iteration Control")).length,
+  ).toBeGreaterThanOrEqual(2);
+  expect(await screen.findByText("Recent learning activity")).toBeDefined();
+  expect(
+    await screen.findByText("What have I done? See full history"),
+  ).toBeDefined();
+});
+
+test("next action with a problem is actionable and code-free", async () => {
+  vi.stubGlobal(
+    "fetch",
+    mockFetch({
+      "POST /student/sessions": sessionPayload(),
+      "GET /student/concepts?session_id=sess-pages": {
+        ...conceptsPayload(),
+        next_action: {
+          action: "REMEDIAL_PROBLEM",
+          reason:
+            "C3 mastery is 0.12, below 0.40: review the concept and attempt targeted remedial practice.",
+          problem_id: "PY-C3-LOOP-MISCONCEPTION",
+          problem_title: "Sum One to N",
+          concept_id: "C3",
+        },
+      },
+    }),
+  );
+  render(
+    <SessionProvider>
+      <ProgressPage />
+    </SessionProvider>,
+  );
+  expect(
+    await screen.findByText("Practice a simpler variant of this idea first."),
+  ).toBeDefined();
+  expect(await screen.findByText(/still building/i)).toBeDefined();
+  expect(await screen.findByText("Sum One to N")).toBeDefined();
+  expect(
+    await screen.findByRole("link", { name: /Continue practicing/ }),
+  ).toBeDefined();
+  expect(screen.queryByText(/0\.12/)).toBeNull();
+  expect(screen.queryByText(/C3 mastery/)).toBeNull();
+});

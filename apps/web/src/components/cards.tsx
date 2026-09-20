@@ -55,9 +55,15 @@ export function ContinueCard({
 
 export function NextStepCard({
   recommendation,
+  conceptTitle,
 }: {
   recommendation: RecommendationView;
+  /** Human-readable focus concept (looked up by the page, never raw). */
+  conceptTitle?: string | null;
 }) {
+  const actionable = Boolean(
+    recommendation.problem_id ?? recommendation.problem_title,
+  );
   return (
     <Card label="Recommended next step">
       <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
@@ -66,6 +72,11 @@ export function NextStepCard({
       <h2 className="mt-1 text-lg font-semibold">
         {actionVerb(recommendation.action)}
       </h2>
+      {conceptTitle && (
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+          Current focus: <span className="font-medium">{conceptTitle}</span>
+        </p>
+      )}
       {recommendation.problem_title && (
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
           Suggested problem:{" "}
@@ -76,6 +87,16 @@ export function NextStepCard({
         <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
           Why: {humanizeReason(recommendation.reason)}
         </p>
+      )}
+      {actionable && (
+        <div className="mt-4">
+          <Link
+            href="/practice"
+            className="rounded-lg bg-teal-800 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-teal-700 dark:bg-teal-200 dark:text-teal-950 dark:hover:bg-teal-100"
+          >
+            Continue practicing →
+          </Link>
+        </div>
       )}
       {isDebugMode() && (
         <pre className="mt-3 overflow-x-auto rounded-md bg-zinc-100 p-3 font-mono text-xs dark:bg-zinc-900">

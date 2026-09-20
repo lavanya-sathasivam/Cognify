@@ -312,3 +312,67 @@ test("submission error surfaces the backend message", async () => {
     expect(screen.getByRole("alert").textContent).toMatch(/before moving on/),
   );
 });
+
+test("failure shows what Cognify suggests next without engine values", async () => {
+  vi.stubGlobal(
+    "fetch",
+    mockFetch({
+      "POST /student/sessions": sessionPayload(),
+      "POST /student/submissions": {
+        ...failedPayload(),
+        recommendations: [
+          {
+            action: "REMEDIAL_PROBLEM",
+            reason:
+              "C3 mastery is 0.12, below 0.40: review the concept and attempt targeted remedial practice.",
+            problem_id: "PY-C3-LOOP-MISCONCEPTION",
+            problem_title: "Sum One to N",
+          },
+        ],
+      },
+    }),
+  );
+  renderPractice();
+  await screen.findByRole("button", { name: "Submit" });
+  fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+  expect(await screen.findByText("What Cognify suggests next")).toBeDefined();
+  expect(
+    await screen.findByText("Practice a simpler variant of this idea first."),
+  ).toBeDefined();
+  expect(await screen.findByText(/still building/i)).toBeDefined();
+  expect(await screen.findByText(/Sum One to N/)).toBeDefined();
+  expect(screen.queryByText(/0\.12/)).toBeNull();
+  expect(screen.queryByText(/C3 mastery/)).toBeNull();
+  expect(screen.queryByText(/C[1-8]-M\d{2}/)).toBeNull();
+});
+
+test("java track stays java-only across the practice screen", async () => {
+  const javaProblem = {
+    ...PROBLEM,
+    problem_id: "JAVA-C3-COUNT-DIV",
+    language: "java",
+    title: "Count Divisible Numbers",
+    starter_code:
+      "public class CountDivisible {\n    // solve here\n}\n",
+  };
+  vi.stubGlobal(
+    "fetch",
+    mockFetch({
+      "POST /student/sessions": {
+        ...sessionPayload(),
+        session_id: "sess-java",
+        language_track: "java",
+        problem: javaProblem,
+      },
+    }),
+  );
+  renderPractice();
+  expect(await screen.findByText("Practice Java")).toBeDefined();
+  expect(await screen.findByText("Java track")).toBeDefined();
+  const editor = (await screen.findByLabelText(
+    "Your Java code",
+  )) as HTMLTextAreaElement;
+  expect(editor.value).toContain("CountDivisible");
+  expect(screen.queryByLabelText("Your Python code")).toBeNull();
+  expect(screen.queryByText(/Practice Python/)).toBeNull();
+});
