@@ -1,0 +1,49 @@
+{
+  "problem_id": "PY-C3-LOOP-MISCONCEPTION",
+  "concept_id": "C3",
+  "language": "python",
+  "difficulty": 1,
+  "title": "Sum One to N",
+  "description": "Read an integer n and compute the sum 1 + 2 + ... + n using a loop and an accumulator, printing the total. The range is inclusive on both ends: when n is 1 the answer is 1, not 0. This is a misconception probe for C3-M05 (python-range-exclusivity): a loop written as range(1, n) silently drops the final value. Its boundary tests distinguish inclusive-bound reasoning from exclusive-range reasoning. Like every EvidencePack, a failure here is observed evidence that can help diagnosis, never a deterministic detection on its own.",
+  "constraints": [
+    "1 <= n <= 10000",
+    "Input is a single integer."
+  ],
+  "starter_code": "def sum_to_n(n):\n    \"\"\"Return the sum 1 + 2 + ... + n inclusive.\"\"\"\n    # TODO: implement using a loop and an accumulator\n    raise NotImplementedError\n\n\ndef main():\n    import sys\n    data = sys.stdin.read().strip().split()\n    if not data:\n        return\n    n = int(data[0])\n    print(sum_to_n(n))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "A single integer n.",
+  "output_format": "A single integer: the sum 1 + 2 + ... + n inclusive.",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "5\n",
+      "expected_output": "15"
+    },
+    {
+      "id": "P2",
+      "input": "1\n",
+      "expected_output": "1"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "10\n",
+      "expected_output": "55"
+    },
+    {
+      "id": "H2",
+      "input": "2\n",
+      "expected_output": "3"
+    },
+    {
+      "id": "H3",
+      "input": "100\n",
+      "expected_output": "5050"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C3-INCLUSIVE-SUM",
+  "variant_role": "remedial",
+  "misconception_ids": [
+    "C3-M05"
+  ]
+}

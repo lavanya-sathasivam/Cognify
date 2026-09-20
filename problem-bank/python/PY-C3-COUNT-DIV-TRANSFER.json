@@ -1,0 +1,51 @@
+{
+  "problem_id": "PY-C3-COUNT-DIV-TRANSFER",
+  "concept_id": "C3",
+  "language": "python",
+  "difficulty": 2,
+  "title": "Count Cold Days",
+  "description": "A weather station recorded n daily temperatures. Read an integer threshold and the n readings, then count how many days were strictly colder than the threshold, using a loop and an accumulator. A reading t counts only when t < threshold; a reading exactly equal to the threshold does not count. This is the transfer variant of 'Count Divisible Numbers': same loop-bounds and accumulator skill, different surface story and filter predicate.",
+  "constraints": [
+    "1 <= n <= 1000",
+    "-100 <= threshold <= 100",
+    "Each of the n temperatures satisfies -100 <= value <= 100"
+  ],
+  "starter_code": "def count_cold_days(temps, threshold):\n    \"\"\"Return how many temperatures in temps are strictly below threshold.\"\"\"\n    # TODO: implement using a loop and an accumulator\n    raise NotImplementedError\n\n\ndef main():\n    import sys\n    data = sys.stdin.read().strip().split()\n    if not data:\n        return\n    n = int(data[0])\n    threshold = int(data[1])\n    temps = list(map(int, data[2:2 + n]))\n    print(count_cold_days(temps, threshold))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "First line: two integers n and threshold separated by a space. Second line: n integers (the daily temperatures) separated by spaces.",
+  "output_format": "A single integer: how many of the n temperatures are strictly below threshold.",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "5 0\n-3 5 0 -1 2\n",
+      "expected_output": "2"
+    },
+    {
+      "id": "P2",
+      "input": "4 10\n10 9 11 8\n",
+      "expected_output": "2"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "1 -5\n-5\n",
+      "expected_output": "0"
+    },
+    {
+      "id": "H2",
+      "input": "6 100\n1 2 3 4 5 6\n",
+      "expected_output": "6"
+    },
+    {
+      "id": "H3",
+      "input": "3 0\n0 0 0\n",
+      "expected_output": "0"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C3-COUNT-DIV",
+  "variant_role": "transfer",
+  "misconception_ids": [
+    "C3-M01",
+    "C3-M04"
+  ]
+}

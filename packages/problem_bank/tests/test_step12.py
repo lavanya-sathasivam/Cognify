@@ -328,10 +328,16 @@ class ProblemLoadTests(unittest.TestCase):
             bank_loader.load_problem(123)  # type: ignore[arg-type]
 
     def test_bank_lists_exactly_one_problem(self):
+        # Step 13 expansion note: the bank now holds the canonical problem
+        # plus transfer/misconception variants, so this asserts the Step 12
+        # canonical is present with unchanged metadata (superset-tolerant)
+        # rather than bank-singleton equality. Uniqueness is enforced by
+        # load_all_problems (duplicate IDs raise).
         ids = bank_loader.list_problem_ids()
-        self.assertEqual(ids, [PROBLEM_ID])
+        self.assertIn(PROBLEM_ID, ids)
+        self.assertEqual(len(ids), len(set(ids)))
         all_problems = bank_loader.load_all_problems()
-        self.assertEqual(sorted(all_problems), [PROBLEM_ID])
+        self.assertIn(PROBLEM_ID, all_problems)
         self.assertEqual(all_problems[PROBLEM_ID].concept_id, "C3")
 
 
