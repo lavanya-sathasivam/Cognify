@@ -158,8 +158,13 @@ def _evidence_base(
         "mastery_threshold": threshold,
         "trend": state.trend,
         "attempt_count": state.attempt_count,
+        "pass_count": state.pass_count,
+        "fail_count": state.fail_count,
+        "recent_pass_rate": state.recent_pass_rate,
         "hint_dependence": state.hint_dependence,
         "transfer_success_rate": state.transfer_success_rate,
+        "transfer_attempts": state.transfer_attempts,
+        "transfer_successes": state.transfer_successes,
     }
     if language_track is not None:
         evidence["language_track"] = language_track
@@ -241,6 +246,7 @@ def evaluate_concept(
             ev["is_recurring"] = True
             ev["occurrence_count"] = primary_recurring.occurrence_count
             ev["recent_count"] = primary_recurring.recent_count
+            ev["distinct_variant_count"] = primary_recurring.distinct_variant_count
         return ev
 
     def _review_priority() -> int:

@@ -260,7 +260,9 @@ Location: `services/core-backend/app/learner_engine.py` + `packages/mastery/`
 - Tracks attempts, pass/fail history, mastery, mastery band
   (`novice`/`emerging`/`proficient`/`mastered`/`unknown`), trend
   (`unknown`/`stable`/`improving`/`declining`), hint dependence, transfer
-  evidence (transfer success rate), and recurring misconceptions.
+  evidence (transfer attempts/successes/failures + success rate with an
+  explicit canonical-vs-transfer breakdown and trailing per-attempt history),
+  and recurring misconceptions (with supporting problem/group evidence).
 - New `(journey, concept)` state starts at mastery `0.20` / band `novice` /
   trend `unknown` with zero counts.
 - All state is namespaced per `(user, language_track)`; Python and Java
@@ -269,6 +271,11 @@ Location: `services/core-backend/app/learner_engine.py` + `packages/mastery/`
   evidence + diagnoses); the pure formula lives in `packages/mastery`.
 - History is append-only (`attempt`, `diagnosis`, `mastery_transition`,
   `recurring_detected`/`recurring_cleared` events explain "why is mastery X?").
+  Each `mastery_transition` carries previous/current mastery, delta, reason,
+  attempt number, hint/transfer flags, bands, trend, and evidence refs; read
+  views clamp rates instead of crashing on inconsistent legacy counters, and
+  adaptive evidence echoes pass/fail + transfer + recent-rate context while
+  decisions stay deterministic (R1–R8 unchanged).
 - Adaptive decisions are deterministic reads of this state.
 
 ## 10. Adaptive engine

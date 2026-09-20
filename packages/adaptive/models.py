@@ -114,7 +114,16 @@ def _require_language_track(value: object) -> str:
 
 @dataclass(frozen=True)
 class ConceptState:
-    """Learner state for one concept (read-only input to the policy)."""
+    """Learner state for one concept (read-only input to the policy).
+
+    Step 18 richer inputs: ``pass_count`` / ``fail_count`` /
+    ``transfer_attempts`` / ``transfer_successes`` / ``recent_pass_rate``
+    are optional derived evidence carried through from
+    ``learner_engine.get_concept_view`` when available. They are echoed
+    into ``supporting_evidence`` for explainability but never change the
+    R1..R8 decision branches (policy thresholds are unchanged), so existing
+    rankings are preserved while "why this action?" answers get richer.
+    """
 
     concept_id: str
     mastery: float
@@ -124,6 +133,11 @@ class ConceptState:
     hint_dependence: float
     transfer_success_rate: float
     language_track: str | None = None
+    pass_count: int = 0
+    fail_count: int = 0
+    transfer_attempts: int = 0
+    transfer_successes: int = 0
+    recent_pass_rate: float = 0.0
 
     def __post_init__(self) -> None:
         norm_concept = _require_concept_id(self.concept_id)
@@ -148,6 +162,25 @@ class ConceptState:
         _require_non_negative_int(self.attempt_count, "attempt_count")
         _require_unit_float(self.hint_dependence, "hint_dependence")
         _require_unit_float(self.transfer_success_rate, "transfer_success_rate")
+        _require_non_negative_int(self.pass_count, "pass_count")
+        _require_non_negative_int(self.fail_count, "fail_count")
+        _require_non_negative_int(self.transfer_attempts, "transfer_attempts")
+        _require_non_negative_int(self.transfer_successes, "transfer_successes")
+        _require_unit_float(self.recent_pass_rate, "recent_pass_rate")
+        if self.transfer_successes > self.transfer_attempts:
+            raise ValueError(
+                f"transfer_successes ({self.transfer_successes}) cannot exceed "
+                f"transfer_attempts ({self.transfer_attempts})."
+            )
+        if self.pass_count + self.fail_count != 0 and self.attempt_count != 0:
+            # Totals should reconcile when both are supplied; tolerate
+            # legacy rows where only attempt_count is known (pass/fail 0).
+            if self.pass_count > self.attempt_count or self.fail_count > self.attempt_count:
+                raise ValueError(
+                    f"pass_count ({self.pass_count}) / fail_count "
+                    f"({self.fail_count}) inconsistent with attempt_count "
+                    f"({self.attempt_count})."
+                )
         track: str | None = None
         if self.language_track is not None:
             track = _require_language_track(self.language_track)
@@ -167,6 +200,11 @@ class ConceptState:
             "hint_dependence": self.hint_dependence,
             "transfer_success_rate": self.transfer_success_rate,
             "language_track": self.language_track,
+            "pass_count": self.pass_count,
+            "fail_count": self.fail_count,
+            "transfer_attempts": self.transfer_attempts,
+            "transfer_successes": self.transfer_successes,
+            "recent_pass_rate": self.recent_pass_rate,
         }
 
     @classmethod
@@ -182,17 +220,39 @@ class ConceptState:
             hint_dependence=data["hint_dependence"],
             transfer_success_rate=data["transfer_success_rate"],
             language_track=data.get("language_track"),
+            pass_count=data.get("pass_count", 0),
+            fail_count=data.get("fail_count", 0),
+            transfer_attempts=data.get("transfer_attempts", 0),
+            transfer_successes=data.get("transfer_successes", 0),
+            recent_pass_rate=data.get("recent_pass_rate", 0.0),
         )
 
     @classmethod
     def from_learner_view(cls, view: dict[str, Any]) -> "ConceptState":
         """Adapt a Step 8 ``get_concept_view`` dict (tolerates extra keys).
 
-        Never touches a DB session; pure mapping of plain data.
+        Never touches a DB session; pure mapping of plain data. Step 18
+        richer fields (pass/fail counts, transfer breakdown, recent pass
+        rate) are picked up when present and default to 0 otherwise, so
+        both legacy minimal views and enriched Step 18 views adapt.
         """
         if not isinstance(view, dict):
             raise TypeError(f"view must be a dict, got {type(view).__name__}.")
         band = view.get("band", view.get("mastery_band", "unknown"))
+        recent = view.get("recent_performance", {})
+        recent_rate = 0.0
+        if isinstance(recent, dict):
+            try:
+                recent_rate = float(recent.get("pass_rate", 0.0))
+            except (TypeError, ValueError):
+                recent_rate = 0.0
+            if not 0.0 <= recent_rate <= 1.0:
+                recent_rate = max(0.0, min(1.0, recent_rate))
+        else:
+            try:
+                recent_rate = float(view.get("recent_pass_rate", 0.0))
+            except (TypeError, ValueError):
+                recent_rate = 0.0
         return cls(
             concept_id=view["concept_id"],
             mastery=view["mastery"],
@@ -202,12 +262,23 @@ class ConceptState:
             hint_dependence=view["hint_dependence"],
             transfer_success_rate=view["transfer_success_rate"],
             language_track=view.get("language_track"),
+            pass_count=int(view.get("pass_count", 0)),
+            fail_count=int(view.get("fail_count", 0)),
+            transfer_attempts=int(view.get("transfer_attempts", 0)),
+            transfer_successes=int(view.get("transfer_successes", 0)),
+            recent_pass_rate=recent_rate,
         )
 
 
 @dataclass(frozen=True)
 class MisconceptionState:
-    """Active misconception snapshot (read-only input to the policy)."""
+    """Active misconception snapshot (read-only input to the policy).
+
+    Step 18: ``distinct_variant_count`` (R3 isomorphic evidence) is carried
+    when available so recurring recommendations can cite variant evidence,
+    not just repeated labels. Defaults to 0 for legacy inputs; decisions
+    (``is_recurring``) are still supplied by callers, never recomputed.
+    """
 
     misconception_id: str
     concept_id: str
@@ -215,6 +286,7 @@ class MisconceptionState:
     recent_count: int
     is_recurring: bool
     last_seen: str | None = None
+    distinct_variant_count: int = 0
 
     def __post_init__(self) -> None:
         from packages.taxonomy import misconception_belongs_to
@@ -228,6 +300,9 @@ class MisconceptionState:
             )
         _require_non_negative_int(self.occurrence_count, "occurrence_count")
         _require_non_negative_int(self.recent_count, "recent_count")
+        _require_non_negative_int(
+            self.distinct_variant_count, "distinct_variant_count"
+        )
         if not isinstance(self.is_recurring, bool):
             raise TypeError(
                 f"is_recurring must be bool, got {type(self.is_recurring).__name__}."
@@ -253,6 +328,7 @@ class MisconceptionState:
             "recent_count": self.recent_count,
             "is_recurring": self.is_recurring,
             "last_seen": self.last_seen,
+            "distinct_variant_count": self.distinct_variant_count,
         }
 
     @classmethod
@@ -268,6 +344,7 @@ class MisconceptionState:
             recent_count=data.get("recent_count", 0),
             is_recurring=bool(data.get("is_recurring", False)),
             last_seen=data.get("last_seen"),
+            distinct_variant_count=data.get("distinct_variant_count", 0),
         )
 
     @classmethod
@@ -282,6 +359,7 @@ class MisconceptionState:
             recent_count=view.get("recent_count", view.get("recent_occurrence_count", 0)),
             is_recurring=bool(view.get("is_recurring", False)),
             last_seen=view.get("last_seen_at", view.get("last_seen")),
+            distinct_variant_count=int(view.get("distinct_variant_count", 0)),
         )
 
 

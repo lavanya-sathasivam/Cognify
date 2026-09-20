@@ -226,6 +226,49 @@ def _prior_recent_pass_rate(
     return round(sum(1 for ok in outcomes if ok) / len(outcomes), 4)
 
 
+def _safe_hint_dependence(hint_count: int, attempt_count: int) -> float:
+    """Read-view hint dependence that never raises on inconsistent counters.
+
+    The write path (``packages.mastery.formula.hint_dependence_rate``) stays
+    strict and raises on ``hint_count > attempt_count``. Read views must not
+    crash on legacy/inconsistent rows (the DB only enforces ``>= 0``, not
+    the cross-field invariant), so this clamps instead: 0 attempts -> 0.0,
+    over-count -> 1.0, negatives treated as 0.
+    """
+    try:
+        hints = int(hint_count)
+        attempts = int(attempt_count)
+    except (TypeError, ValueError):
+        return 0.0
+    if attempts <= 0:
+        return 0.0
+    if hints <= 0:
+        return 0.0
+    if hints >= attempts:
+        return 1.0
+    return round(hints / attempts, 4)
+
+
+def _safe_transfer_rate(successes: int, attempts: int) -> float:
+    """Read-view transfer rate that never raises on inconsistent counters.
+
+    Same contract as :func:`_safe_hint_dependence`: 0 attempts -> 0.0,
+    over-count clamps to 1.0 instead of raising.
+    """
+    try:
+        ok = int(successes)
+        total = int(attempts)
+    except (TypeError, ValueError):
+        return 0.0
+    if total <= 0:
+        return 0.0
+    if ok <= 0:
+        return 0.0
+    if ok >= total:
+        return 1.0
+    return round(ok / total, 4)
+
+
 # ---------------------------------------------------------------------------
 # Read views (no writes)
 # ---------------------------------------------------------------------------
@@ -238,7 +281,16 @@ def get_concept_view(
     attempt_count, pass_count, fail_count, recent_performance
     ({last_5, pass_rate}), trend, active_misconception_ids (sorted),
     hint_dependence, hint_count, transfer_success_rate, transfer_attempts,
-    transfer_successes, last_attempted_at (ISO or None).
+    transfer_successes, transfer_failures, canonical_attempts,
+    transfer_breakdown ({attempts, successes, failures, success_rate}),
+    recent_history ([{problem_id, passed, hint_used, is_transfer}] newest
+    trailing 5, oldest -> newest), last_attempted_at (ISO or None).
+
+    All pre-existing keys keep their exact semantics; the ``transfer_*`` /
+    ``canonical_*`` / ``recent_history`` keys are additive (Step 18) so
+    existing callers and ``ConceptState.from_learner_view`` keep working.
+    Rates in read views are clamped (never raise) so inconsistent legacy
+    rows cannot crash the view; the write-path formula stays strict.
     """
     norm_concept = repositories.normalize_concept_id(concept_id)
     journey = session.get(Journey, journey_id)
@@ -266,6 +318,15 @@ def get_concept_view(
             "transfer_success_rate": 0.0,
             "transfer_attempts": 0,
             "transfer_successes": 0,
+            "transfer_failures": 0,
+            "canonical_attempts": 0,
+            "transfer_breakdown": {
+                "attempts": 0,
+                "successes": 0,
+                "failures": 0,
+                "success_rate": 0.0,
+            },
+            "recent_history": [],
             "last_attempted_at": None,
         }
     histories = _attempt_histories(session, journey_id, norm_concept, limit=5)
@@ -287,6 +348,23 @@ def get_concept_view(
         else _iso_or_none(state.updated_at)
     )
     fail_count = max(0, state.attempt_count - state.successful_attempts)
+    transfer_attempts = max(0, int(state.transfer_attempts))
+    transfer_successes = max(0, int(state.transfer_successes))
+    if transfer_successes > transfer_attempts:
+        transfer_successes = transfer_attempts
+    transfer_failures = max(0, transfer_attempts - transfer_successes)
+    canonical_attempts = max(0, int(state.attempt_count) - transfer_attempts)
+    hint_dependence = _safe_hint_dependence(state.hint_count, state.attempt_count)
+    transfer_rate = _safe_transfer_rate(transfer_successes, transfer_attempts)
+    recent_history = [
+        {
+            "problem_id": h.get("problem_id"),
+            "passed": bool(h.get("passed")),
+            "hint_used": bool(h.get("hint_used", False)),
+            "is_transfer": bool(h.get("is_transfer", False)),
+        }
+        for h in histories
+    ]
     return {
         "user_id": state.user_id,
         "journey_id": journey_id,
@@ -300,15 +378,20 @@ def get_concept_view(
         "recent_performance": {"last_5": last_5, "pass_rate": pass_rate},
         "trend": state.trend,
         "active_misconception_ids": active_ids,
-        "hint_dependence": mastery_formula.hint_dependence_rate(
-            state.hint_count, state.attempt_count
-        ),
+        "hint_dependence": hint_dependence,
         "hint_count": state.hint_count,
-        "transfer_success_rate": mastery_formula.transfer_success_rate(
-            state.transfer_successes, state.transfer_attempts
-        ),
-        "transfer_attempts": state.transfer_attempts,
-        "transfer_successes": state.transfer_successes,
+        "transfer_success_rate": transfer_rate,
+        "transfer_attempts": transfer_attempts,
+        "transfer_successes": transfer_successes,
+        "transfer_failures": transfer_failures,
+        "canonical_attempts": canonical_attempts,
+        "transfer_breakdown": {
+            "attempts": transfer_attempts,
+            "successes": transfer_successes,
+            "failures": transfer_failures,
+            "success_rate": transfer_rate,
+        },
+        "recent_history": recent_history,
         "last_attempted_at": last_at,
     }
 
@@ -316,7 +399,14 @@ def get_concept_view(
 def get_misconception_view(
     session: Session, journey_id: int, concept_id: str, misconception_id: str
 ) -> dict[str, Any]:
-    """Per-misconception tracking view (counts + recency + improvement)."""
+    """Per-misconception tracking view (counts + recency + improvement).
+
+    Adds Step 18 ``supporting_problem_ids`` (sorted distinct problem_ids
+    where this misconception was observed) and ``supporting_groups``
+    (sorted distinct isomorphic_group_ids) so recurrence reasons are backed
+    by concrete attempt evidence, not just repeated labels. All
+    pre-existing keys keep their exact semantics.
+    """
     norm_concept = repositories.normalize_concept_id(concept_id)
     norm_m = repositories.normalize_misconception_id(misconception_id)
     if not mastery_pkg or True:
@@ -355,6 +445,20 @@ def get_misconception_view(
         weakness_rules.has_improved(pairs, norm_m) if pairs else False
     )
     flag = repositories.get_flag(session, journey_id, norm_concept, norm_m)
+    supporting_problem_ids = sorted(
+        {
+            str(h["problem_id"])
+            for h in histories
+            if h["misconception_id"] == norm_m and h.get("problem_id")
+        }
+    )
+    supporting_groups = sorted(
+        {
+            str(h["isomorphic_group_id"])
+            for h in histories
+            if h["misconception_id"] == norm_m and h.get("isomorphic_group_id")
+        }
+    )
     return {
         "misconception_id": norm_m,
         "concept_id": norm_concept,
@@ -362,6 +466,8 @@ def get_misconception_view(
         "recent_count": recent_count,
         "recent_window": weakness_rules.RECENT_WINDOW,
         "distinct_variant_count": n_variants,
+        "supporting_problem_ids": supporting_problem_ids,
+        "supporting_groups": supporting_groups,
         "last_seen_at": _iso_or_none(counter.last_seen_at) if counter else None,
         "active": bool(counter.active) if counter is not None else False,
         "is_recurring": bool(flag.is_recurring) if flag is not None else is_rec,
@@ -666,6 +772,7 @@ def record_attempt(
         metadata={
             "problem_id": norm_problem,
             "isomorphic_group_id": norm_iso,
+            "attempt_number": new_attempt_count,
             "previous_mastery": previous_mastery,
             "new_mastery": new_mastery,
             "delta": delta,
@@ -730,6 +837,13 @@ def explain_mastery(
     where ``transitions`` are the ``mastery_transition`` events (oldest ->
     newest) with their linked attempt context, and ``narrative`` answers
     "Why is mastery X?" in one deterministic paragraph.
+
+    Step 18: each trace entry carries the full transition evidence already
+    stored in ``mastery_transition`` metadata (previous/current mastery,
+    delta, reason, attempt_number, hint/transfer flags, bands, trend,
+    execution outcome, evidence refs, isomorphic group) plus the linked
+    attempt's problem id, so every update explains previous state, current
+    state, reason for change, and the relevant attempt.
     """
     norm_concept = repositories.normalize_concept_id(concept_id)
     view = get_concept_view(session, journey_id, norm_concept)
@@ -744,17 +858,29 @@ def explain_mastery(
         (e.event_metadata or {}).get("attempt_number"): e for e in attempts
     }
     trace: list[dict[str, Any]] = []
-    for event in transitions:
+    for idx, event in enumerate(transitions):
         meta = dict(event.event_metadata or {})
         attempt_number = meta.get("attempt_number")
+        if attempt_number is None:
+            # Legacy rows pre-Step 18 carry no attempt_number; the nth
+            # transition corresponds to the nth attempt (both append-only,
+            # ordered by id).
+            attempt_number = idx + 1
         # Fallback: correlate by order when attempt_number is missing
         # (legacy rows); link nth transition to nth attempt.
         linked = attempt_by_number.get(attempt_number)
+        if linked is None and 1 <= int(attempt_number) <= len(attempts):
+            try:
+                linked = attempts[int(attempt_number) - 1]
+            except (TypeError, ValueError, IndexError):
+                linked = None
         trace.append(
             {
                 "event_id": event.id,
                 "created_at": _iso_or_none(event.created_at),
+                "attempt_number": attempt_number,
                 "problem_id": meta.get("problem_id"),
+                "isomorphic_group_id": meta.get("isomorphic_group_id"),
                 "previous_mastery": meta.get("previous_mastery"),
                 "new_mastery": meta.get("new_mastery"),
                 "delta": meta.get("delta"),
@@ -762,6 +888,11 @@ def explain_mastery(
                 "evidence_refs": meta.get("evidence_refs", []),
                 "passed": meta.get("passed"),
                 "execution_status": meta.get("execution_status"),
+                "hint_used": meta.get("hint_used"),
+                "is_transfer": meta.get("is_transfer"),
+                "band_before": meta.get("band_before"),
+                "band_after": meta.get("band_after"),
+                "trend": meta.get("trend"),
                 "misconception_id": event.misconception_id,
                 "attempt_problem_id": (
                     (linked.event_metadata or {}).get("problem_id")
@@ -772,19 +903,24 @@ def explain_mastery(
         )
     recent = trace[-3:] if trace else []
     recent_bits = "; ".join(
-        f"attempt on {t['problem_id']}: "
+        f"attempt {t['attempt_number']} on {t['problem_id']}: "
         f"{t['previous_mastery']}->{t['new_mastery']} ({t['delta']:+}) "
         f"via {t['reason']}"
         for t in recent
     )
+    breakdown = view.get("transfer_breakdown", {})
     narrative = (
         f"Mastery for {norm_concept} ({view['language_track']}) is "
         f"{view['mastery']:.2f} ({view['band']}) after "
         f"{view['attempt_count']} attempt(s) "
         f"({view['pass_count']} passed, {view['fail_count']} failed; "
         f"trend {view['trend']}, hint dependence "
-        f"{view['hint_dependence']:.2f}, transfer success "
-        f"{view['transfer_success_rate']:.2f})."
+        f"{view['hint_dependence']:.2f} "
+        f"({view.get('hint_count', 0)} hinted), transfer "
+        f"{breakdown.get('successes', view.get('transfer_successes', 0))}/"
+        f"{breakdown.get('attempts', view.get('transfer_attempts', 0))} "
+        f"(rate {view['transfer_success_rate']:.2f}, "
+        f"{view.get('canonical_attempts', view['attempt_count'])} canonical))."
     )
     if recent_bits:
         narrative += f" Recent transitions: {recent_bits}."

@@ -32,8 +32,10 @@ from .formula import (
     hint_dependence_rate,
     is_transfer_variant,
     mastery_band,
+    normalize_execution_status,
     recent_pass_rate,
     severity_for_status,
+    transfer_success_rate,
 )
 from .weakness import (
     HISTORICAL_THRESHOLD,
@@ -75,7 +77,9 @@ __all__ = [
     "is_transfer_variant",
     "isomorphic_variant_count",
     "mastery_band",
+    "normalize_execution_status",
     "recent_occurrence_count",
     "recent_pass_rate",
     "severity_for_status",
+    "transfer_success_rate",
 ]
