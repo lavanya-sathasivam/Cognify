@@ -1,0 +1,50 @@
+{
+  "problem_id": "PY-C7-BANK-ACCOUNT-TRANSFER",
+  "concept_id": "C7",
+  "language": "python",
+  "difficulty": 3,
+  "title": "Shopping Cart Totals",
+  "description": "Process m cart commands, one per line. ADD <cart> <qty> adds qty items to that cart only; TOTAL <cart> prints the cart's item count, or UNKNOWN when the cart does not exist. Each cart's count must live on its own instance, and the constructor must assign every field it declares. This is the transfer variant of 'Bank Account Ledger': same C7 skill (per-instance state plus correct construction), different domain and command vocabulary. Reusing the bank commands (OPEN/DEPOSIT/BALANCE) cannot process these carts.",
+  "constraints": [
+    "1 <= m <= 1000",
+    "Names have 1 to 20 letters; 0 <= qty <= 1000000000."
+  ],
+  "starter_code": "class ShoppingCart:\n    \"\"\"One cart with its own item count.\"\"\"\n    def __init__(self, name):\n        # TODO: store name and a zero count on THIS instance (self)\n        raise NotImplementedError\n\n    def add(self, qty):\n        # TODO: add qty to this cart's count\n        raise NotImplementedError\n\n\ndef main():\n    import sys\n    lines = sys.stdin.read().strip().splitlines()\n    if not lines:\n        return\n    m = int(lines[0].split()[0])\n    carts = {}\n    out = []\n    for line in lines[1:1 + m]:\n        parts = line.split()\n        if parts[0] == \"ADD\":\n            if parts[1] not in carts:\n                carts[parts[1]] = ShoppingCart(parts[1])\n            carts[parts[1]].add(int(parts[2]))\n        elif parts[0] == \"TOTAL\":\n            if parts[1] in carts:\n                out.append(str(carts[parts[1]].count))\n            else:\n                out.append(\"UNKNOWN\")\n    sys.stdout.write(\"\\n\".join(out))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "First line: an integer m. Next m lines: commands ADD <cart> <qty> or TOTAL <cart>.",
+  "output_format": "One line per TOTAL command: the item count, or UNKNOWN.",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "3\nADD cart1 4\nADD cart1 6\nTOTAL cart1\n",
+      "expected_output": "10"
+    },
+    {
+      "id": "P2",
+      "input": "2\nADD c1 3\nTOTAL c9\n",
+      "expected_output": "UNKNOWN"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "5\nADD a 1\nADD b 2\nADD a 3\nTOTAL a\nTOTAL b\n",
+      "expected_output": "4\n2"
+    },
+    {
+      "id": "H2",
+      "input": "2\nADD x 0\nTOTAL x\n",
+      "expected_output": "0"
+    },
+    {
+      "id": "H3",
+      "input": "4\nADD y 5\nADD y 5\nADD y 5\nTOTAL y\n",
+      "expected_output": "15"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C7-BANK-ACCOUNT",
+  "variant_role": "transfer",
+  "misconception_ids": [
+    "C7-M01",
+    "C7-M02"
+  ]
+}

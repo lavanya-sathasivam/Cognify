@@ -1,0 +1,50 @@
+{
+  "problem_id": "PY-C5-FIND-MAX",
+  "concept_id": "C5",
+  "language": "python",
+  "difficulty": 2,
+  "title": "Find the Maximum",
+  "description": "Read an integer n followed by n integers, and print the largest value. Valid indices run 0 to n - 1, so the last element lives at index n - 1, never n; accessing index n crashes. The comparison must start from the first element (not from 0), because all values can be negative. This problem establishes the C5 base skill of list traversal, indexing, and search.",
+  "constraints": [
+    "1 <= n <= 1000",
+    "Each of the n values satisfies -1000000000 <= value <= 1000000000"
+  ],
+  "starter_code": "def find_max(nums):\n    \"\"\"Return the largest value in nums.\"\"\"\n    # TODO: traverse the list with valid indices 0..len(nums)-1\n    raise NotImplementedError\n\n\ndef main():\n    import sys\n    data = sys.stdin.read().strip().split()\n    if not data:\n        return\n    n = int(data[0])\n    nums = list(map(int, data[1:1 + n]))\n    print(find_max(nums))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "First line: an integer n. Second line: n integers separated by spaces.",
+  "output_format": "A single integer: the largest of the n values.",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "5\n3 1 4 1 5\n",
+      "expected_output": "5"
+    },
+    {
+      "id": "P2",
+      "input": "3\n-5 -2 -9\n",
+      "expected_output": "-2"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "1\n42\n",
+      "expected_output": "42"
+    },
+    {
+      "id": "H2",
+      "input": "4\n7 7 7 7\n",
+      "expected_output": "7"
+    },
+    {
+      "id": "H3",
+      "input": "6\n-1 0 -3 2 -8 1\n",
+      "expected_output": "2"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C5-FIND-MAX",
+  "variant_role": "canonical",
+  "misconception_ids": [
+    "C5-M01",
+    "C5-M04"
+  ]
+}

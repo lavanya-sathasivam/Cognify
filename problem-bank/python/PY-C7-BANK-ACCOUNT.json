@@ -1,0 +1,50 @@
+{
+  "problem_id": "PY-C7-BANK-ACCOUNT",
+  "concept_id": "C7",
+  "language": "python",
+  "difficulty": 3,
+  "title": "Bank Account Ledger",
+  "description": "Process m ledger commands, one per line. OPEN <name> <balance> creates an account with its OWN balance; DEPOSIT <name> <amt> adds amt to that account only; BALANCE <name> prints the account's balance, or UNKNOWN when the account does not exist. Each account's state must live on its own instance: state stored on the class is shared by every account and corrupts the others, and fields the constructor never assigns stay missing. This problem establishes the C7 base skill of classes, constructors, and instance state.",
+  "constraints": [
+    "1 <= m <= 1000",
+    "Names have 1 to 20 letters; 0 <= balance, amt <= 1000000000."
+  ],
+  "starter_code": "class BankAccount:\n    \"\"\"One account with its own balance.\"\"\"\n    def __init__(self, name, balance):\n        # TODO: store name and balance on THIS instance (self), not the class\n        raise NotImplementedError\n\n    def deposit(self, amt):\n        # TODO: add amt to this account's balance\n        raise NotImplementedError\n\n\ndef main():\n    import sys\n    lines = sys.stdin.read().strip().splitlines()\n    if not lines:\n        return\n    m = int(lines[0].split()[0])\n    accounts = {}\n    out = []\n    for line in lines[1:1 + m]:\n        parts = line.split()\n        if parts[0] == \"OPEN\":\n            accounts[parts[1]] = BankAccount(parts[1], int(parts[2]))\n        elif parts[0] == \"DEPOSIT\":\n            if parts[1] in accounts:\n                accounts[parts[1]].deposit(int(parts[2]))\n        elif parts[0] == \"BALANCE\":\n            if parts[1] in accounts:\n                out.append(str(accounts[parts[1]].balance))\n            else:\n                out.append(\"UNKNOWN\")\n    sys.stdout.write(\"\\n\".join(out))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "First line: an integer m. Next m lines: commands OPEN <name> <balance>, DEPOSIT <name> <amt>, or BALANCE <name>.",
+  "output_format": "One line per BALANCE command: the balance, or UNKNOWN.",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "3\nOPEN amy 100\nDEPOSIT amy 50\nBALANCE amy\n",
+      "expected_output": "150"
+    },
+    {
+      "id": "P2",
+      "input": "2\nOPEN bob 10\nBALANCE zed\n",
+      "expected_output": "UNKNOWN"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "5\nOPEN a 100\nOPEN b 200\nDEPOSIT a 25\nBALANCE a\nBALANCE b\n",
+      "expected_output": "125\n200"
+    },
+    {
+      "id": "H2",
+      "input": "3\nOPEN c 0\nDEPOSIT c 0\nBALANCE c\n",
+      "expected_output": "0"
+    },
+    {
+      "id": "H3",
+      "input": "4\nOPEN d 50\nDEPOSIT d 25\nDEPOSIT d 25\nBALANCE d\n",
+      "expected_output": "100"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C7-BANK-ACCOUNT",
+  "variant_role": "canonical",
+  "misconception_ids": [
+    "C7-M01",
+    "C7-M02"
+  ]
+}

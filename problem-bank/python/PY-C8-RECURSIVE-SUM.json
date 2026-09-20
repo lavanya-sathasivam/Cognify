@@ -1,0 +1,49 @@
+{
+  "problem_id": "PY-C8-RECURSIVE-SUM",
+  "concept_id": "C8",
+  "language": "python",
+  "difficulty": 1,
+  "title": "Recursive Sum to N",
+  "description": "Read an integer n and print the sum 1 + 2 + ... + n, computed with a RECURSIVE function: the sum to 1 is 1, otherwise it is n plus the sum to n - 1. This is a targeted remedial probe for C8-M01 (missing-base-or-progress): without the n == 1 base case the recursion never stops, so the smallest boundary (n = 1) distinguishes base-case reasoning from endless-decomposition reasoning. Like every EvidencePack, a failure here is observed evidence that can help diagnosis, never a deterministic detection on its own.",
+  "constraints": [
+    "1 <= n <= 900",
+    "Input is a single integer."
+  ],
+  "starter_code": "def recursive_sum(n):\n    \"\"\"Return 1 + 2 + ... + n recursively.\"\"\"\n    # TODO: handle the base case (n == 1) then recurse on n - 1\n    raise NotImplementedError\n\n\ndef main():\n    import sys\n    data = sys.stdin.read().strip().split()\n    if not data:\n        return\n    n = int(data[0])\n    print(recursive_sum(n))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "A single integer n.",
+  "output_format": "A single integer: the sum 1 + 2 + ... + n.",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "5\n",
+      "expected_output": "15"
+    },
+    {
+      "id": "P2",
+      "input": "1\n",
+      "expected_output": "1"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "3\n",
+      "expected_output": "6"
+    },
+    {
+      "id": "H2",
+      "input": "10\n",
+      "expected_output": "55"
+    },
+    {
+      "id": "H3",
+      "input": "2\n",
+      "expected_output": "3"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C8-RECURSIVE-SUM",
+  "variant_role": "remedial",
+  "misconception_ids": [
+    "C8-M01"
+  ]
+}

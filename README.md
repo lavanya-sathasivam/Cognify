@@ -2,9 +2,11 @@
 
 **COGNIFY** is an AI-powered adaptive programming learning system that understands **WHY** a student struggles with programming concepts, provides targeted interventions based on the student's diagnosed weaknesses and learning history, and verifies whether the student actually improved.
 
-> Current state: implementation through Step 17 is complete, including the
+> Current state: implementation through Step 19 is complete, including the
 > Docker execution architecture fix (`ccfc49d fix execution service sandbox
-> architecture`, working tree clean). Step 18 has NOT been started.
+> architecture`), the learner-intelligence upgrade, and the C1–C8 Python
+> problem-bank expansion (24 problems, working tree clean). Step 20 has NOT
+> been started.
 > The full learning loop works for the Python C3 slice
 > (execution → Evidence Pack → diagnosis → learner model → intervention →
 > retry → transfer → verification → adaptive recommendation) with a
@@ -339,21 +341,56 @@ remains owned by the learner engine, which consumes the result as evidence.
 Location: `problem-bank/` (JSON + canonical solutions) loaded/validated via
 `packages/problem-schema` and `packages/problem_bank/`.
 
-Current Python problems (C3, `isomorphic_group_id` links variants):
+Current Python problems (all 8 concepts, canonical + remedial + transfer per
+concept; each canonical shares its `isomorphic_group_id` with its transfer,
+each remedial is its own targeted family):
 
-| Problem ID | Title | Role | Group | Tests |
-|------------|-------|------|-------|-------|
-| `PY-C3-COUNT-DIV` | Count Divisible Numbers | canonical | `ISO-C3-COUNT-DIV` | 2 public + 3 hidden (5 total) |
-| `PY-C3-COUNT-DIV-TRANSFER` | Count Cold Days | transfer | `ISO-C3-COUNT-DIV` | 2 public + 3 hidden (5 total) |
-| `PY-C3-LOOP-MISCONCEPTION` | Sum One to N | remedial/probe | `ISO-C3-INCLUSIVE-SUM` | 2 public + 3 hidden (5 total) |
+| Problem ID | Title | Concept | Role | Group |
+|------------|-------|---------|------|-------|
+| `PY-C1-TEMP-CONVERT` | Fahrenheit to Celsius | C1 | canonical | `ISO-C1-TEMP-CONVERT` |
+| `PY-C1-AVG-PAIR` | Average of Two Numbers | C1 | remedial | `ISO-C1-AVG-PAIR` |
+| `PY-C1-TEMP-CONVERT-TRANSFER` | Hours From Minutes | C1 | transfer | `ISO-C1-TEMP-CONVERT` |
+| `PY-C2-GRADE-BAND` | Grade Band Classifier | C2 | canonical | `ISO-C2-GRADE-BAND` |
+| `PY-C2-EITHER-OR` | Either Or Check | C2 | remedial | `ISO-C2-EITHER-OR` |
+| `PY-C2-GRADE-BAND-TRANSFER` | Parcel Shipping Class | C2 | transfer | `ISO-C2-GRADE-BAND` |
+| `PY-C3-COUNT-DIV` | Count Divisible Numbers | C3 | canonical | `ISO-C3-COUNT-DIV` |
+| `PY-C3-COUNT-DIV-TRANSFER` | Count Cold Days | C3 | transfer | `ISO-C3-COUNT-DIV` |
+| `PY-C3-LOOP-MISCONCEPTION` | Sum One to N | C3 | remedial/probe | `ISO-C3-INCLUSIVE-SUM` |
+| `PY-C4-RECT-METRICS` | Rectangle Area and Perimeter | C4 | canonical | `ISO-C4-RECT-METRICS` |
+| `PY-C4-DOUBLE-IT` | Double It Function | C4 | remedial | `ISO-C4-DOUBLE-IT` |
+| `PY-C4-RECT-METRICS-TRANSFER` | Box Volume and Surface | C4 | transfer | `ISO-C4-RECT-METRICS` |
+| `PY-C5-FIND-MAX` | Find the Maximum | C5 | canonical | `ISO-C5-FIND-MAX` |
+| `PY-C5-LAST-ITEM` | Last List Item | C5 | remedial | `ISO-C5-LAST-ITEM` |
+| `PY-C5-FIND-MAX-TRANSFER` | Longest Word | C5 | transfer | `ISO-C5-FIND-MAX` |
+| `PY-C6-COUNT-WORD` | Count Word Occurrences | C6 | canonical | `ISO-C6-WORD-COUNT` |
+| `PY-C6-SAFE-LOOKUP` | Safe Price Lookup | C6 | remedial | `ISO-C6-SAFE-LOOKUP` |
+| `PY-C6-COUNT-WORD-TRANSFER` | Stock Totals | C6 | transfer | `ISO-C6-WORD-COUNT` |
+| `PY-C7-BANK-ACCOUNT` | Bank Account Ledger | C7 | canonical | `ISO-C7-BANK-ACCOUNT` |
+| `PY-C7-COUNTER` | Simple Counter Object | C7 | remedial | `ISO-C7-COUNTER` |
+| `PY-C7-BANK-ACCOUNT-TRANSFER` | Shopping Cart Totals | C7 | transfer | `ISO-C7-BANK-ACCOUNT` |
+| `PY-C8-FACTORIAL` | Recursive Factorial | C8 | canonical | `ISO-C8-FACTORIAL` |
+| `PY-C8-RECURSIVE-SUM` | Recursive Sum to N | C8 | remedial | `ISO-C8-RECURSIVE-SUM` |
+| `PY-C8-FACTORIAL-TRANSFER` | Recursive Integer Power | C8 | transfer | `ISO-C8-FACTORIAL` |
 
-- Each problem declares `concept_id`, `language`, `difficulty`,
-  `variant_role` (`canonical`/`transfer`/`remedial`), `misconception_ids`,
+24 problems total (2 public + 3 hidden tests each, 5 total per problem).
+The C3 trio is unchanged from earlier steps. C8 covers the recursion
+family only (base/progress cases), not exceptions or complexity — those
+remain taxonomy entries without bank problems.
+
+- Each problem declares `concept_id`, `language`, `difficulty` (1–3 in the
+  current bank),
+  `variant_role` (`canonical`/`transfer`/`remedial`), `misconception_ids`
+  (existing taxonomy IDs only, all Python-scoped),
   starter code, I/O formats, and public + hidden tests.
-- Transfer uses a different surface story but the related loop skill
-  (counting with bounds + accumulator).
-- The bank is intentionally small (C3 canonical + transfer + probe); it is
-  not a large-scale catalog (see limitations).
+- Transfer uses a different surface story and input shape but the related
+  concept skill; reference-logic cross-checks prove neither variant solves
+  the other (see `packages/problem_bank/tests/test_step19.py`).
+- Remedial problems are simpler probes isolating one misconception, each
+  with a boundary test the intended mistake deterministically fails.
+- Deterministic diagnosis rules still cover selected C3/Python patterns
+  only; all new C1/C2/C4–C8 failures honestly use the fallback/LLM path
+  (no new problem claims a rule-covered misconception).
+- The bank is Python-only in this step; `problem-bank/java/` is still reserved.
 - `problem-bank/java/` is reserved and currently empty.
 
 ## 13. Code execution architecture
@@ -491,11 +528,11 @@ only; everything else uses the LLM (if configured) or the safe fallback.
 
 ## 18. Testing and validation
 
-Last verified results (implementation through Step 17):
+Last verified results (implementation through Step 19):
 
-- Core backend: **149 passed**
+- Core backend: **170 passed**
 - Execution service: **39 passed**
-- Packages: **255 passed, 27 subtests passed**
+- Packages: **284 passed, 27 subtests passed** (incl. 20 new Step 19 bank tests)
 - Frontend: **7 Vitest tests passed**
 - TypeScript: `npx tsc --noEmit` **passed**
 - ESLint: `npm run lint` **passed**
@@ -540,7 +577,10 @@ Honest boundaries for reviewers:
   only; everything else uses the LLM (if configured) or the safe fallback.
 - The **Java track is not exposed** in the UI (bank placeholder only),
   even though Java execution works in the execution service.
-- The **problem bank is small** (C3 canonical + transfer + probe).
+- The **problem bank covers all 8 concepts in Python** (24 problems:
+  canonical + remedial + transfer per concept), but the student demo flow
+  and deterministic diagnosis rules still focus on the C3 slice; other
+  concepts rely on fallback/LLM diagnosis.
 - The UI never claims mastery unless the learner model reports band
   `mastered`.
 - Re-submitting a transfer re-records attempts (append-only learner log,
@@ -562,7 +602,7 @@ This prototype intentionally does **not** include:
 
 ## 20. Current implementation status
 
-Completed milestones (Steps 1–17):
+Completed milestones (Steps 1–19):
 
 1. Project architecture and repository structure
 2. Concept taxonomy (C1–C8)
@@ -582,6 +622,10 @@ Completed milestones (Steps 1–17):
 16. Docker-based execution architecture
 17. Core-backend → execution-service HTTP execution client and Docker
     sandbox fix (`ccfc49d`)
+18. Learner-intelligence upgrade (structured transfer breakdown, richer
+    explanations and adaptive evidence, additive only)
+19. Problem-bank expansion to C1–C8 in Python (24 problems: canonical +
+    remedial + transfer per concept)
 
 ### IMPLEMENTED / VERIFIED
 
@@ -594,7 +638,7 @@ Completed milestones (Steps 1–17):
 - Evidence-grounded deterministic C3 rules + validated LLM path + fallback;
   structured interventions with closed vocabularies.
 - Learner model (attempts, mastery, band, trend, hint dependence, transfer
-  evidence, recurring misconceptions) with append-only history.
+  evidence with canonical/transfer breakdown, recurring misconceptions) with append-only history.
 - Deterministic adaptive recommendations (6 action types) and verification
   verdicts (4 outcomes).
 - Student API (`/student/sessions`, `/student/problems/{id}`,
@@ -607,8 +651,9 @@ Completed milestones (Steps 1–17):
 
 - Language tracks: Python end-to-end via UI; Java executes in the sandbox
   but has no bank content and no student UI flow.
-- Problem bank: 3 Python C3 problems only (canonical, transfer, probe) —
-  enough for the demo loop, not a curriculum.
+- Problem bank: 24 Python problems (C1–C8, canonical + remedial +
+  transfer each); the interactive demo loop still runs the C3 slice, and
+  C8 covers recursion only (no exception/complexity bank problems yet).
 - Persistence: process-local/in-memory session store (+ SQLite dev
   defaults); no durable multi-user database.
 - LLM diagnosis: works when configured (`openai` + key), otherwise rules +
@@ -620,12 +665,13 @@ Completed milestones (Steps 1–17):
 - Advanced analytics dashboard.
 - Production database persistence (durable multi-user storage).
 - Authentication (and payments).
-- Large-scale problem bank (beyond the 3-problem C3 slice).
+- Large-scale problem bank (beyond the 24-problem C1–C8 Python slice:
+  Java bank, exception/complexity C8 problems, deeper per-concept sets).
 - Full Java student UI flow.
 - Production deployment / cloud infrastructure.
 - LLM evaluation benchmarks.
 - Stronger isolation such as gVisor/Firecracker.
-- Step 18 and beyond.
+- Step 20 and beyond.
 
 ## 21. Local development / Docker run instructions
 

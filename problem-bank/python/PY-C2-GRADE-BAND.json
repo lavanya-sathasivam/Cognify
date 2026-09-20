@@ -1,0 +1,50 @@
+{
+  "problem_id": "PY-C2-GRADE-BAND",
+  "concept_id": "C2",
+  "language": "python",
+  "difficulty": 2,
+  "title": "Grade Band Classifier",
+  "description": "Read an integer exam score from 0 to 100 and print its band: DISTINCTION when score >= 85, MERIT when score >= 65, PASS when score >= 50, otherwise FAIL. Every boundary is inclusive: a score of exactly 85 is DISTINCTION and exactly 50 is PASS. The branches must be checked from the highest threshold down so each score lands in exactly one band. This problem establishes the C2 base skill of conditionals and boolean logic.",
+  "constraints": [
+    "0 <= score <= 100",
+    "Input is a single integer."
+  ],
+  "starter_code": "def grade_band(score):\n    \"\"\"Return DISTINCTION, MERIT, PASS, or FAIL for score.\"\"\"\n    # TODO: compare score against the thresholds with if/elif/else\n    raise NotImplementedError\n\n\ndef main():\n    import sys\n    data = sys.stdin.read().strip().split()\n    if not data:\n        return\n    score = int(data[0])\n    print(grade_band(score))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "A single integer score.",
+  "output_format": "A single line: DISTINCTION, MERIT, PASS, or FAIL.",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "90\n",
+      "expected_output": "DISTINCTION"
+    },
+    {
+      "id": "P2",
+      "input": "70\n",
+      "expected_output": "MERIT"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "50\n",
+      "expected_output": "PASS"
+    },
+    {
+      "id": "H2",
+      "input": "49\n",
+      "expected_output": "FAIL"
+    },
+    {
+      "id": "H3",
+      "input": "85\n",
+      "expected_output": "DISTINCTION"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C2-GRADE-BAND",
+  "variant_role": "canonical",
+  "misconception_ids": [
+    "C2-M01",
+    "C2-M03"
+  ]
+}

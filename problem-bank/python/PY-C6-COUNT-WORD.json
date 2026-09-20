@@ -1,0 +1,50 @@
+{
+  "problem_id": "PY-C6-COUNT-WORD",
+  "concept_id": "C6",
+  "language": "python",
+  "difficulty": 2,
+  "title": "Count Word Occurrences",
+  "description": "Read an integer n, then n words, then one query word, and print how many times the query appears among the n words. A query that never appears counts 0: look the key up safely (guard or default) instead of indexing a missing key, which raises KeyError. This problem establishes the C6 base skill of dictionary frequency counting with missing-key handling.",
+  "constraints": [
+    "1 <= n <= 1000",
+    "Each word has 1 to 50 lowercase letters."
+  ],
+  "starter_code": "def count_word(words, query):\n    \"\"\"Return how many times query appears in words.\"\"\"\n    # TODO: count with a dict and look the query up safely (0 when absent)\n    raise NotImplementedError\n\n\ndef main():\n    import sys\n    data = sys.stdin.read().strip().split()\n    if not data:\n        return\n    n = int(data[0])\n    words = data[1:1 + n]\n    query = data[1 + n]\n    print(count_word(words, query))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "First line: an integer n. Second line: n words separated by spaces. Third line: one query word.",
+  "output_format": "A single integer: occurrences of the query (0 when absent).",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "5\nred blue red green red\nred\n",
+      "expected_output": "3"
+    },
+    {
+      "id": "P2",
+      "input": "3\na b c\nd\n",
+      "expected_output": "0"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "1\nsolo\nsolo\n",
+      "expected_output": "1"
+    },
+    {
+      "id": "H2",
+      "input": "4\nx x y x\nx\n",
+      "expected_output": "3"
+    },
+    {
+      "id": "H3",
+      "input": "2\na a\na\n",
+      "expected_output": "2"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C6-WORD-COUNT",
+  "variant_role": "canonical",
+  "misconception_ids": [
+    "C6-M01",
+    "C6-M05"
+  ]
+}

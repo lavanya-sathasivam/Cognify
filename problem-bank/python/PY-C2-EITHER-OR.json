@@ -1,0 +1,49 @@
+{
+  "problem_id": "PY-C2-EITHER-OR",
+  "concept_id": "C2",
+  "language": "python",
+  "difficulty": 1,
+  "title": "Either Or Check",
+  "description": "Read an integer x and print YES when x is exactly 5 or exactly 10, otherwise print NO. This is a targeted remedial probe for C2-M01 (boolean-operator-confusion): writing `x == 5 or 10` makes the condition always truthy, so the negative boundary cases distinguish genuine two-sided comparison reasoning from truthy-or reasoning. Like every EvidencePack, a failure here is observed evidence that can help diagnosis, never a deterministic detection on its own.",
+  "constraints": [
+    "-1000000000 <= x <= 1000000000",
+    "Input is a single integer."
+  ],
+  "starter_code": "def either_or(x):\n    \"\"\"Return YES when x is 5 or 10, else NO.\"\"\"\n    # TODO: compare x against BOTH values explicitly\n    raise NotImplementedError\n\n\ndef main():\n    import sys\n    data = sys.stdin.read().strip().split()\n    if not data:\n        return\n    x = int(data[0])\n    print(either_or(x))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "A single integer x.",
+  "output_format": "A single line: YES or NO.",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "5\n",
+      "expected_output": "YES"
+    },
+    {
+      "id": "P2",
+      "input": "7\n",
+      "expected_output": "NO"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "10\n",
+      "expected_output": "YES"
+    },
+    {
+      "id": "H2",
+      "input": "0\n",
+      "expected_output": "NO"
+    },
+    {
+      "id": "H3",
+      "input": "-5\n",
+      "expected_output": "NO"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C2-EITHER-OR",
+  "variant_role": "remedial",
+  "misconception_ids": [
+    "C2-M01"
+  ]
+}

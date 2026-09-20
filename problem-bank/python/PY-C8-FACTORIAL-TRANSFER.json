@@ -1,0 +1,50 @@
+{
+  "problem_id": "PY-C8-FACTORIAL-TRANSFER",
+  "concept_id": "C8",
+  "language": "python",
+  "difficulty": 3,
+  "title": "Recursive Integer Power",
+  "description": "Read two integers a and b and print a raised to the power b (a**b), computed with a RECURSIVE function: any number to the power 0 is 1, otherwise it is a times the power for b - 1. The base case is on the EXPONENT, and every call must shrink it toward zero. This is the transfer variant of 'Recursive Factorial': same C8 skill (reachable base case plus progress toward it), different decomposition shape. Reusing the single-argument factorial recursion cannot process the two-argument power inputs.",
+  "constraints": [
+    "0 <= a <= 10",
+    "0 <= b <= 10",
+    "Input is two integers separated by a space."
+  ],
+  "starter_code": "def power(a, b):\n    \"\"\"Return a**b recursively.\"\"\"\n    # TODO: handle the base case (b == 0) then recurse on b - 1\n    raise NotImplementedError\n\n\ndef main():\n    import sys\n    data = sys.stdin.read().strip().split()\n    if not data:\n        return\n    a = int(data[0])\n    b = int(data[1])\n    print(power(a, b))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "Two integers a and b separated by a space.",
+  "output_format": "A single integer: a raised to the power b.",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "2 10\n",
+      "expected_output": "1024"
+    },
+    {
+      "id": "P2",
+      "input": "5 0\n",
+      "expected_output": "1"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "3 3\n",
+      "expected_output": "27"
+    },
+    {
+      "id": "H2",
+      "input": "0 5\n",
+      "expected_output": "0"
+    },
+    {
+      "id": "H3",
+      "input": "7 2\n",
+      "expected_output": "49"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C8-FACTORIAL",
+  "variant_role": "transfer",
+  "misconception_ids": [
+    "C8-M01"
+  ]
+}

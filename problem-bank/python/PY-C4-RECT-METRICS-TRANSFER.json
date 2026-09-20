@@ -1,0 +1,50 @@
+{
+  "problem_id": "PY-C4-RECT-METRICS-TRANSFER",
+  "concept_id": "C4",
+  "language": "python",
+  "difficulty": 2,
+  "title": "Box Volume and Surface",
+  "description": "Read three integers l, w, and h (a box's edge lengths) and print its volume and surface area separated by a space: volume = l * w * h, surface = 2 * (l*w + w*h + h*l). Structure the solution with helper functions that RETURN their values and call each helper with exactly the arguments it declares. This is the transfer variant of 'Rectangle Area and Perimeter': same function-definition and return/call skill, different geometric context and arity. Reusing the two-argument rectangle helpers cannot produce these answers.",
+  "constraints": [
+    "0 <= l, w, h <= 1000",
+    "Input is three integers separated by spaces."
+  ],
+  "starter_code": "def volume_of(l, w, h):\n    \"\"\"Return the volume l * w * h.\"\"\"\n    # TODO: return the volume (do not just print it)\n    raise NotImplementedError\n\n\ndef surface_of(l, w, h):\n    \"\"\"Return the surface area 2 * (l*w + w*h + h*l).\"\"\"\n    # TODO: return the surface area (do not just print it)\n    raise NotImplementedError\n\n\ndef main():\n    import sys\n    data = sys.stdin.read().strip().split()\n    if not data:\n        return\n    l = int(data[0])\n    w = int(data[1])\n    h = int(data[2])\n    print(f\"{volume_of(l, w, h)} {surface_of(l, w, h)}\")\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "Three integers l, w, and h separated by spaces.",
+  "output_format": "Two integers separated by a space: the volume, then the surface area.",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "2 3 4\n",
+      "expected_output": "24 52"
+    },
+    {
+      "id": "P2",
+      "input": "1 1 1\n",
+      "expected_output": "1 6"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "5 5 5\n",
+      "expected_output": "125 150"
+    },
+    {
+      "id": "H2",
+      "input": "10 1 1\n",
+      "expected_output": "10 42"
+    },
+    {
+      "id": "H3",
+      "input": "0 3 4\n",
+      "expected_output": "0 24"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C4-RECT-METRICS",
+  "variant_role": "transfer",
+  "misconception_ids": [
+    "C4-M03",
+    "C4-M04"
+  ]
+}

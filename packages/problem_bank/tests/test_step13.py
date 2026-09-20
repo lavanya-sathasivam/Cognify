@@ -135,9 +135,13 @@ def _failed_result_dict(problem: Problem, failing_test_id: str) -> dict:
 # ---------------------------------------------------------------------------
 class BankDiscoveryTests(unittest.TestCase):
     def test_all_three_problems_load(self):
+        # Step 19 expansion note: the bank now covers C1-C8 (24 problems),
+        # so this asserts the Step 13 C3 trio is present with unchanged
+        # loading behavior (superset-tolerant) rather than bank-singleton
+        # equality. Bank-wide uniqueness/counts live in test_step19.py.
         ids = bank_loader.list_problem_ids()
-        self.assertEqual(ids, EXPECTED_IDS)
         for pid in EXPECTED_IDS:
+            self.assertIn(pid, ids)
             problem = bank_loader.load_problem(pid)
             self.assertEqual(problem.problem_id, pid)
 
@@ -191,12 +195,13 @@ class BankDiscoveryTests(unittest.TestCase):
 
     def test_loader_discovers_all_three(self):
         all_problems = bank_loader.load_all_problems()
-        self.assertEqual(sorted(all_problems), EXPECTED_IDS)
+        for pid in EXPECTED_IDS:
+            self.assertIn(pid, sorted(all_problems))
 
     def test_no_duplicate_problem_ids(self):
         ids = bank_loader.list_problem_ids()
         self.assertEqual(len(ids), len(set(ids)))
-        self.assertEqual(len(bank_loader.load_all_problems()), 3)
+        self.assertGreaterEqual(len(bank_loader.load_all_problems()), 3)
 
 
 # ---------------------------------------------------------------------------

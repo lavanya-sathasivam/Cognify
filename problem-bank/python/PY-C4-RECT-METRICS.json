@@ -1,0 +1,50 @@
+{
+  "problem_id": "PY-C4-RECT-METRICS",
+  "concept_id": "C4",
+  "language": "python",
+  "difficulty": 2,
+  "title": "Rectangle Area and Perimeter",
+  "description": "Read two integers w and h (a rectangle's side lengths) and print its area and perimeter separated by a space: area = w * h, perimeter = 2 * (w + h). Structure the solution with helper functions that RETURN their values (area_of, perimeter_of); a helper that only prints instead of returning leaves the caller with None. Call each helper with exactly the arguments it declares. This problem establishes the C4 base skill of function definition, parameters, return values, and call semantics.",
+  "constraints": [
+    "0 <= w, h <= 1000000",
+    "Input is two integers separated by a space."
+  ],
+  "starter_code": "def area_of(w, h):\n    \"\"\"Return the area w * h.\"\"\"\n    # TODO: return the area (do not just print it)\n    raise NotImplementedError\n\n\ndef perimeter_of(w, h):\n    \"\"\"Return the perimeter 2 * (w + h).\"\"\"\n    # TODO: return the perimeter (do not just print it)\n    raise NotImplementedError\n\n\ndef main():\n    import sys\n    data = sys.stdin.read().strip().split()\n    if not data:\n        return\n    w = int(data[0])\n    h = int(data[1])\n    print(f\"{area_of(w, h)} {perimeter_of(w, h)}\")\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "Two integers w and h separated by a space.",
+  "output_format": "Two integers separated by a space: the area, then the perimeter.",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "3 4\n",
+      "expected_output": "12 14"
+    },
+    {
+      "id": "P2",
+      "input": "5 5\n",
+      "expected_output": "25 20"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "1 1\n",
+      "expected_output": "1 4"
+    },
+    {
+      "id": "H2",
+      "input": "10 2\n",
+      "expected_output": "20 24"
+    },
+    {
+      "id": "H3",
+      "input": "0 7\n",
+      "expected_output": "0 14"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C4-RECT-METRICS",
+  "variant_role": "canonical",
+  "misconception_ids": [
+    "C4-M03",
+    "C4-M04"
+  ]
+}

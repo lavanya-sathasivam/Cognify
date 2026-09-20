@@ -1,0 +1,49 @@
+{
+  "problem_id": "PY-C4-DOUBLE-IT",
+  "concept_id": "C4",
+  "language": "python",
+  "difficulty": 1,
+  "title": "Double It Function",
+  "description": "Read an integer n and print its double (2 * n), computed by a helper function that must RETURN the value. This is a targeted remedial probe for C4-M03 (missing-or-ignored-return): a helper that prints the answer instead of returning it leaves the caller holding None, so every test distinguishes returning reasoning from printing reasoning. Like every EvidencePack, a failure here is observed evidence that can help diagnosis, never a deterministic detection on its own.",
+  "constraints": [
+    "-1000000000 <= n <= 1000000000",
+    "Input is a single integer."
+  ],
+  "starter_code": "def double_it(n):\n    \"\"\"Return 2 * n.\"\"\"\n    # TODO: return the doubled value (do not just print it)\n    raise NotImplementedError\n\n\ndef main():\n    import sys\n    data = sys.stdin.read().strip().split()\n    if not data:\n        return\n    n = int(data[0])\n    print(double_it(n))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "A single integer n.",
+  "output_format": "A single integer: 2 * n.",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "21\n",
+      "expected_output": "42"
+    },
+    {
+      "id": "P2",
+      "input": "0\n",
+      "expected_output": "0"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "-5\n",
+      "expected_output": "-10"
+    },
+    {
+      "id": "H2",
+      "input": "1\n",
+      "expected_output": "2"
+    },
+    {
+      "id": "H3",
+      "input": "1000\n",
+      "expected_output": "2000"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C4-DOUBLE-IT",
+  "variant_role": "remedial",
+  "misconception_ids": [
+    "C4-M03"
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "problem_id": "PY-C1-TEMP-CONVERT-TRANSFER",
+  "concept_id": "C1",
+  "language": "python",
+  "difficulty": 2,
+  "title": "Hours From Minutes",
+  "description": "Read an integer number of minutes m and print the equivalent hours with exactly one decimal place, using hours = m / 60. This is the transfer variant of 'Fahrenheit to Celsius': same underlying C1 skill (console-input conversion plus float division that must not truncate), different real-world calculation and divisor. Copying the temperature formula (F - 32) * 5 / 9 cannot produce these answers.",
+  "constraints": [
+    "0 <= m <= 1000000",
+    "Input is a single integer."
+  ],
+  "starter_code": "def hours_from_minutes(m):\n    \"\"\"Return the hours equivalent of m minutes as a float.\"\"\"\n    # TODO: convert m to a number if needed and divide by 60 without truncating\n    raise NotImplementedError\n\n\ndef main():\n    import sys\n    data = sys.stdin.read().strip().split()\n    if not data:\n        return\n    m = int(data[0])\n    print(f\"{hours_from_minutes(m):.1f}\")\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "A single integer m (minutes).",
+  "output_format": "A single number: the hours equivalent with exactly one decimal place.",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "90\n",
+      "expected_output": "1.5"
+    },
+    {
+      "id": "P2",
+      "input": "60\n",
+      "expected_output": "1.0"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "45\n",
+      "expected_output": "0.8"
+    },
+    {
+      "id": "H2",
+      "input": "150\n",
+      "expected_output": "2.5"
+    },
+    {
+      "id": "H3",
+      "input": "7\n",
+      "expected_output": "0.1"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C1-TEMP-CONVERT",
+  "variant_role": "transfer",
+  "misconception_ids": [
+    "C1-M02",
+    "C1-M03"
+  ]
+}

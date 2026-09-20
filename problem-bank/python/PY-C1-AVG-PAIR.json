@@ -1,0 +1,49 @@
+{
+  "problem_id": "PY-C1-AVG-PAIR",
+  "concept_id": "C1",
+  "language": "python",
+  "difficulty": 1,
+  "title": "Average of Two Numbers",
+  "description": "Read two integers a and b and print their average with exactly one decimal place, using (a + b) / 2. This is a targeted remedial probe for C1-M02 (type-coercion-and-division): an integer division (//) or a forgotten conversion silently drops the fractional half, so the odd-sum boundary cases distinguish float-division reasoning from truncating-division reasoning. Like every EvidencePack, a failure here is observed evidence that can help diagnosis, never a deterministic detection on its own.",
+  "constraints": [
+    "-1000000000 <= a, b <= 1000000000",
+    "Input is two integers separated by a space."
+  ],
+  "starter_code": "def average_pair(a, b):\n    \"\"\"Return the average of a and b as a float.\"\"\"\n    # TODO: use float division so odd sums keep their .5\n    raise NotImplementedError\n\n\ndef main():\n    import sys\n    data = sys.stdin.read().strip().split()\n    if not data:\n        return\n    a = int(data[0])\n    b = int(data[1])\n    print(f\"{average_pair(a, b):.1f}\")\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "Two integers a and b separated by a space.",
+  "output_format": "A single number: the average of a and b with exactly one decimal place.",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "4 6\n",
+      "expected_output": "5.0"
+    },
+    {
+      "id": "P2",
+      "input": "1 2\n",
+      "expected_output": "1.5"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "0 0\n",
+      "expected_output": "0.0"
+    },
+    {
+      "id": "H2",
+      "input": "-3 4\n",
+      "expected_output": "0.5"
+    },
+    {
+      "id": "H3",
+      "input": "7 8\n",
+      "expected_output": "7.5"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C1-AVG-PAIR",
+  "variant_role": "remedial",
+  "misconception_ids": [
+    "C1-M02"
+  ]
+}

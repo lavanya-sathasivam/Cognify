@@ -1,0 +1,48 @@
+{
+  "problem_id": "PY-C6-SAFE-LOOKUP",
+  "concept_id": "C6",
+  "language": "python",
+  "difficulty": 1,
+  "title": "Safe Price Lookup",
+  "description": "A tiny shop price table holds apple at 5 and banana at 3. Read one query word and print its price, or 0 when the word is not in the table. This is a targeted remedial probe for C6-M01 (missing-key-handling): indexing the table with an absent key raises KeyError instead of answering 0, so the unknown-item cases distinguish guarded-lookup reasoning from direct-index reasoning. Like every EvidencePack, a failure here is observed evidence that can help diagnosis, never a deterministic detection on its own.",
+  "constraints": [
+    "The query is a single word of 1 to 50 characters."
+  ],
+  "starter_code": "PRICES = {\"apple\": 5, \"banana\": 3}\n\n\ndef lookup_price(query):\n    \"\"\"Return the price of query, or 0 when it is not stocked.\"\"\"\n    # TODO: look the key up safely so unknown items give 0, not KeyError\n    raise NotImplementedError\n\n\ndef main():\n    import sys\n    data = sys.stdin.read().strip().split()\n    if not data:\n        return\n    print(lookup_price(data[0]))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "A single word (the item to look up).",
+  "output_format": "A single integer: the price, or 0 when the item is not stocked.",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "apple\n",
+      "expected_output": "5"
+    },
+    {
+      "id": "P2",
+      "input": "cherry\n",
+      "expected_output": "0"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "banana\n",
+      "expected_output": "3"
+    },
+    {
+      "id": "H2",
+      "input": "Apple\n",
+      "expected_output": "0"
+    },
+    {
+      "id": "H3",
+      "input": "grape\n",
+      "expected_output": "0"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C6-SAFE-LOOKUP",
+  "variant_role": "remedial",
+  "misconception_ids": [
+    "C6-M01"
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "problem_id": "PY-C6-COUNT-WORD-TRANSFER",
+  "concept_id": "C6",
+  "language": "python",
+  "difficulty": 2,
+  "title": "Stock Totals",
+  "description": "Read an integer n, then n stock lines of the form `<item> <qty>`, then one query item, and print the total quantity recorded for that item (0 when the item never appears). Quantities for repeated items must be ADDED, and an absent item still answers 0 via a guarded lookup. This is the transfer variant of 'Count Word Occurrences': same C6 skill (accumulating per-key totals with safe missing-key lookup), different record shape and domain. Reusing plain occurrence counting ignores the quantities and cannot produce these answers.",
+  "constraints": [
+    "1 <= n <= 1000",
+    "Each item has 1 to 50 lowercase letters; 0 <= qty <= 1000000."
+  ],
+  "starter_code": "def stock_total(records, query):\n    \"\"\"Return the summed qty for query across (item, qty) records.\"\"\"\n    # TODO: accumulate per-item totals in a dict; answer 0 when absent\n    raise NotImplementedError\n\n\ndef main():\n    import sys\n    data = sys.stdin.read().strip().split()\n    if not data:\n        return\n    n = int(data[0])\n    records = []\n    pos = 1\n    for _ in range(n):\n        records.append((data[pos], int(data[pos + 1])))\n        pos += 2\n    query = data[pos]\n    print(stock_total(records, query))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "First line: an integer n. Next n lines: `<item> <qty>`. Last line: one query item.",
+  "output_format": "A single integer: the summed quantity for the query (0 when absent).",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "3\napple 2\nbanana 5\napple 3\napple\n",
+      "expected_output": "5"
+    },
+    {
+      "id": "P2",
+      "input": "2\nx 1\ny 2\nz\n",
+      "expected_output": "0"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "1\npen 7\npen\n",
+      "expected_output": "7"
+    },
+    {
+      "id": "H2",
+      "input": "4\na 1\nb 2\na 3\nb 4\nb\n",
+      "expected_output": "6"
+    },
+    {
+      "id": "H3",
+      "input": "3\nk 0\nk 0\nk 0\nk\n",
+      "expected_output": "0"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C6-WORD-COUNT",
+  "variant_role": "transfer",
+  "misconception_ids": [
+    "C6-M01",
+    "C6-M05"
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "problem_id": "PY-C2-GRADE-BAND-TRANSFER",
+  "concept_id": "C2",
+  "language": "python",
+  "difficulty": 2,
+  "title": "Parcel Shipping Class",
+  "description": "Read an integer parcel weight w in kilograms and print its shipping class: FREIGHT when w >= 50, STANDARD when w >= 10, LIGHT when w >= 1, otherwise INVALID. Every boundary is inclusive: a weight of exactly 50 is FREIGHT and exactly 1 is LIGHT; a weight of 0 or less is INVALID. This is the transfer variant of 'Grade Band Classifier': same conditional-band skill with inclusive boundaries, different classification context and thresholds. Copying the grade thresholds (85/65/50) cannot produce these answers.",
+  "constraints": [
+    "-1000 <= w <= 1000000",
+    "Input is a single integer."
+  ],
+  "starter_code": "def shipping_class(w):\n    \"\"\"Return FREIGHT, STANDARD, LIGHT, or INVALID for weight w.\"\"\"\n    # TODO: compare w against the shipping thresholds with if/elif/else\n    raise NotImplementedError\n\n\ndef main():\n    import sys\n    data = sys.stdin.read().strip().split()\n    if not data:\n        return\n    w = int(data[0])\n    print(shipping_class(w))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "A single integer w (parcel weight in kilograms).",
+  "output_format": "A single line: FREIGHT, STANDARD, LIGHT, or INVALID.",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "60\n",
+      "expected_output": "FREIGHT"
+    },
+    {
+      "id": "P2",
+      "input": "20\n",
+      "expected_output": "STANDARD"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "1\n",
+      "expected_output": "LIGHT"
+    },
+    {
+      "id": "H2",
+      "input": "0\n",
+      "expected_output": "INVALID"
+    },
+    {
+      "id": "H3",
+      "input": "50\n",
+      "expected_output": "FREIGHT"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C2-GRADE-BAND",
+  "variant_role": "transfer",
+  "misconception_ids": [
+    "C2-M01",
+    "C2-M03"
+  ]
+}

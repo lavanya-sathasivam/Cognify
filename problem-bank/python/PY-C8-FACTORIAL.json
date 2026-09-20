@@ -1,0 +1,50 @@
+{
+  "problem_id": "PY-C8-FACTORIAL",
+  "concept_id": "C8",
+  "language": "python",
+  "difficulty": 2,
+  "title": "Recursive Factorial",
+  "description": "Read an integer n and print n! (n factorial), computed with a RECURSIVE function: n! is 1 when n is 0, otherwise n times (n-1)!. The base case must be reachable and every call must shrink toward it; a missing base case recurses forever and never returns. This problem establishes the C8 base skill of recursive decomposition with base and progress cases.",
+  "constraints": [
+    "0 <= n <= 12",
+    "Input is a single integer."
+  ],
+  "starter_code": "def factorial(n):\n    \"\"\"Return n! recursively.\"\"\"\n    # TODO: handle the base case (n == 0) then recurse on n - 1\n    raise NotImplementedError\n\n\ndef main():\n    import sys\n    data = sys.stdin.read().strip().split()\n    if not data:\n        return\n    n = int(data[0])\n    print(factorial(n))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "A single integer n.",
+  "output_format": "A single integer: n factorial.",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "5\n",
+      "expected_output": "120"
+    },
+    {
+      "id": "P2",
+      "input": "0\n",
+      "expected_output": "1"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "1\n",
+      "expected_output": "1"
+    },
+    {
+      "id": "H2",
+      "input": "10\n",
+      "expected_output": "3628800"
+    },
+    {
+      "id": "H3",
+      "input": "3\n",
+      "expected_output": "6"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C8-FACTORIAL",
+  "variant_role": "canonical",
+  "misconception_ids": [
+    "C8-M01",
+    "C8-M03"
+  ]
+}

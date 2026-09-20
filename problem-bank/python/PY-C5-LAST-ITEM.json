@@ -1,0 +1,49 @@
+{
+  "problem_id": "PY-C5-LAST-ITEM",
+  "concept_id": "C5",
+  "language": "python",
+  "difficulty": 1,
+  "title": "Last List Item",
+  "description": "Read an integer n followed by n integers, and print the last value. Valid indices run 0 to n - 1, so the final element is at index n - 1: index n is out of range and crashes. This is a targeted remedial probe for C5-M01 (index-vs-length): confusing the length with the last valid index fails, most sharply on the single-element boundary where index 1 does not exist. Like every EvidencePack, a failure here is observed evidence that can help diagnosis, never a deterministic detection on its own.",
+  "constraints": [
+    "1 <= n <= 1000",
+    "Each of the n values satisfies -1000000000 <= value <= 1000000000"
+  ],
+  "starter_code": "def last_item(nums):\n    \"\"\"Return the last value in nums.\"\"\"\n    # TODO: use index len(nums) - 1, never len(nums)\n    raise NotImplementedError\n\n\ndef main():\n    import sys\n    data = sys.stdin.read().strip().split()\n    if not data:\n        return\n    n = int(data[0])\n    nums = list(map(int, data[1:1 + n]))\n    print(last_item(nums))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "First line: an integer n. Second line: n integers separated by spaces.",
+  "output_format": "A single integer: the last of the n values.",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "4\n10 20 30 40\n",
+      "expected_output": "40"
+    },
+    {
+      "id": "P2",
+      "input": "1\n99\n",
+      "expected_output": "99"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "3\n-1 -2 -3\n",
+      "expected_output": "-3"
+    },
+    {
+      "id": "H2",
+      "input": "2\n0 0\n",
+      "expected_output": "0"
+    },
+    {
+      "id": "H3",
+      "input": "5\n5 4 3 2 1\n",
+      "expected_output": "1"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C5-LAST-ITEM",
+  "variant_role": "remedial",
+  "misconception_ids": [
+    "C5-M01"
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "problem_id": "PY-C7-COUNTER",
+  "concept_id": "C7",
+  "language": "python",
+  "difficulty": 2,
+  "title": "Simple Counter Object",
+  "description": "Process m counter commands, one per line. INC adds 1, DEC subtracts 1, and SHOW prints the current value, which starts at 0. The value must be assigned inside the constructor and every method must take self: a constructor that never assigns the field, or a method missing self, crashes instead of counting. This is a targeted remedial probe for C7-M02 (constructor-misuse) and C7-M05 (self handling): only a correctly initialized instance with proper method receivers passes. Like every EvidencePack, a failure here is observed evidence that can help diagnosis, never a deterministic detection on its own.",
+  "constraints": [
+    "1 <= m <= 1000",
+    "Each command is INC, DEC, or SHOW."
+  ],
+  "starter_code": "class Counter:\n    \"\"\"A counter starting at 0.\"\"\"\n    def __init__(self):\n        # TODO: assign the starting value on self\n        raise NotImplementedError\n\n    def inc(self):\n        # TODO: add 1 to this counter (remember self)\n        raise NotImplementedError\n\n    def dec(self):\n        # TODO: subtract 1 from this counter (remember self)\n        raise NotImplementedError\n\n    def show(self):\n        # TODO: return this counter's value\n        raise NotImplementedError\n\n\ndef main():\n    import sys\n    lines = sys.stdin.read().strip().splitlines()\n    if not lines:\n        return\n    m = int(lines[0].split()[0])\n    counter = Counter()\n    out = []\n    for line in lines[1:1 + m]:\n        cmd = line.split()[0]\n        if cmd == \"INC\":\n            counter.inc()\n        elif cmd == \"DEC\":\n            counter.dec()\n        elif cmd == \"SHOW\":\n            out.append(str(counter.show()))\n    sys.stdout.write(\"\\n\".join(out))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "First line: an integer m. Next m lines: INC, DEC, or SHOW.",
+  "output_format": "One line per SHOW command: the current counter value.",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "4\nINC\nINC\nSHOW\nSHOW\n",
+      "expected_output": "2\n2"
+    },
+    {
+      "id": "P2",
+      "input": "3\nDEC\nSHOW\nSHOW\n",
+      "expected_output": "-1\n-1"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "1\nSHOW\n",
+      "expected_output": "0"
+    },
+    {
+      "id": "H2",
+      "input": "5\nINC\nDEC\nDEC\nINC\nSHOW\n",
+      "expected_output": "0"
+    },
+    {
+      "id": "H3",
+      "input": "2\nINC\nSHOW\n",
+      "expected_output": "1"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C7-COUNTER",
+  "variant_role": "remedial",
+  "misconception_ids": [
+    "C7-M02",
+    "C7-M05"
+  ]
+}

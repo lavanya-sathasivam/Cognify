@@ -1,0 +1,50 @@
+{
+  "problem_id": "PY-C5-FIND-MAX-TRANSFER",
+  "concept_id": "C5",
+  "language": "python",
+  "difficulty": 2,
+  "title": "Longest Word",
+  "description": "Read an integer n followed by n words, and print the longest word. When several words tie for longest, print the FIRST one. This is the transfer variant of 'Find the Maximum': same C5 skill (traversing a sequence with valid indices and keeping the best seen so far under a strict comparison), different element domain and comparison. Reusing numeric-maximum code on words cannot produce these answers, and a non-strict comparison picks the wrong tied word.",
+  "constraints": [
+    "1 <= n <= 1000",
+    "Each word has 1 to 50 lowercase letters."
+  ],
+  "starter_code": "def longest_word(words):\n    \"\"\"Return the longest word (first one on ties).\"\"\"\n    # TODO: traverse with valid indices and keep the longest seen so far\n    raise NotImplementedError\n\n\ndef main():\n    import sys\n    data = sys.stdin.read().strip().split()\n    if not data:\n        return\n    n = int(data[0])\n    words = data[1:1 + n]\n    print(longest_word(words))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "First line: an integer n. Second line: n words separated by spaces.",
+  "output_format": "A single word: the longest of the n words (first on ties).",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "4\ncat hippopotamus dog bee\n",
+      "expected_output": "hippopotamus"
+    },
+    {
+      "id": "P2",
+      "input": "3\na bb ccc\n",
+      "expected_output": "ccc"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "1\nsolo\n",
+      "expected_output": "solo"
+    },
+    {
+      "id": "H2",
+      "input": "5\nred blue green yellow black\n",
+      "expected_output": "yellow"
+    },
+    {
+      "id": "H3",
+      "input": "4\nab cd ef gh\n",
+      "expected_output": "ab"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C5-FIND-MAX",
+  "variant_role": "transfer",
+  "misconception_ids": [
+    "C5-M01",
+    "C5-M04"
+  ]
+}
