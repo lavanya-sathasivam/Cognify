@@ -8,6 +8,7 @@ Security contract:
 - Memory, CPU and PID limits are always applied.
 - No host environment variables are forwarded.
 - Docker unavailable => fail closed.
+- Output is bounded to prevent memory exhaustion.
 """
 
 from __future__ import annotations
@@ -25,6 +26,8 @@ DEFAULT_MEMORY: str = "256m"
 DEFAULT_CPUS: str = "1.0"
 DEFAULT_PIDS_LIMIT: int = 128
 CONTAINER_WORKDIR: str = "/workspace"
+MAX_STDOUT_CHARS: int = 50_000
+MAX_STDERR_CHARS: int = 10_000
 
 # Used only to copy source files into a Docker-managed volume.
 # This container NEVER executes student code.
@@ -34,6 +37,12 @@ WORKSPACE_SETUP_TIMEOUT: float = 30.0
 
 class SandboxUnavailableError(RuntimeError):
     """Raised when Docker is unavailable or sandbox setup fails."""
+
+
+def _truncate(text: str, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit] + f"...[truncated {len(text) - limit} chars]"
 
 
 @dataclass(frozen=True)
@@ -336,15 +345,18 @@ class DockerSandboxRunner(SandboxRunner):
                     (time.monotonic() - start) * 1000
                 )
 
+                stdout = proc.stdout.decode(
+                    "utf-8",
+                    errors="replace",
+                )
+                stderr = proc.stderr.decode(
+                    "utf-8",
+                    errors="replace",
+                )
+
                 return SandboxResult(
-                    stdout=proc.stdout.decode(
-                        "utf-8",
-                        errors="replace",
-                    ),
-                    stderr=proc.stderr.decode(
-                        "utf-8",
-                        errors="replace",
-                    ),
+                    stdout=_truncate(stdout, MAX_STDOUT_CHARS),
+                    stderr=_truncate(stderr, MAX_STDERR_CHARS),
                     exit_code=proc.returncode,
                     timed_out=False,
                     time_ms=elapsed_ms,
@@ -374,14 +386,15 @@ class DockerSandboxRunner(SandboxRunner):
 
                 return SandboxResult(
                     stdout="",
-                    stderr=(
+                    stderr=_truncate(
                         (
                             partial_text + "\n"
                             if partial_text
                             else ""
                         )
                         + f"TIMEOUT: exceeded "
-                        f"{timeout_seconds}s wall-clock limit."
+                        f"{timeout_seconds}s wall-clock limit.",
+                        MAX_STDERR_CHARS,
                     ),
                     exit_code=-1,
                     timed_out=True,
@@ -484,4 +497,6 @@ __all__ = [
     "SandboxRunner",
     "SandboxUnavailableError",
     "docker_available",
+    "MAX_STDOUT_CHARS",
+    "MAX_STDERR_CHARS",
 ]

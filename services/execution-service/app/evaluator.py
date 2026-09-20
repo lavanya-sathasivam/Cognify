@@ -19,8 +19,20 @@ from __future__ import annotations
 
 from packages.problem_schema import TestCase, normalize_language
 
-from .models import ExecutionResult, ExecutionStatus, TestCaseResult
+from .models import (
+    ExecutionResult,
+    ExecutionStatus,
+    TestCaseResult,
+    MAX_OUTPUT_CHARS,
+    MAX_STDERR_CHARS,
+)
 from .runners import BaseRunner
+
+
+def _truncate(text: str, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit] + f"...[truncated {len(text) - limit} chars]"
 
 
 def normalize_output(text: str) -> str:
@@ -40,7 +52,7 @@ def _compile_error_result(
         language=language,
         execution_time_ms=time_ms,
         stdout="",
-        stderr=compiler_output,
+        stderr=_truncate(compiler_output, MAX_STDERR_CHARS),
         tests=[],
         passed_count=0,
         failed_count=0,
@@ -100,9 +112,9 @@ def evaluate(
                 passed=passed,
                 input=case.input,
                 expected_output=case.expected_output,
-                actual_output=actual,
-                stdout=run.stdout,
-                stderr=run.stderr,
+                actual_output=_truncate(actual, MAX_OUTPUT_CHARS),
+                stdout=_truncate(run.stdout, MAX_OUTPUT_CHARS),
+                stderr=_truncate(run.stderr, MAX_STDERR_CHARS),
                 exit_code=run.exit_code,
                 timed_out=run.timed_out,
                 time_ms=run.time_ms,
@@ -127,8 +139,8 @@ def evaluate(
         status=status,
         language=norm_language,
         execution_time_ms=total_ms,
-        stdout=decisive.stdout,
-        stderr=decisive.stderr,
+        stdout=_truncate(decisive.stdout, MAX_OUTPUT_CHARS),
+        stderr=_truncate(decisive.stderr, MAX_STDERR_CHARS),
         tests=results,
         passed_count=passed_count,
         failed_count=len(failed),

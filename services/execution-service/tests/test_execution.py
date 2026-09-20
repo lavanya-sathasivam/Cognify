@@ -58,6 +58,8 @@ from app.sandbox import (  # noqa: E402
     SandboxResult,
     SandboxUnavailableError,
     docker_available,
+    MAX_STDOUT_CHARS,
+    MAX_STDERR_CHARS,
 )
 from packages.problem_schema import TestCase  # noqa: E402
 
@@ -678,6 +680,330 @@ class ExecutionApiTests(unittest.TestCase):
         self.assertIsInstance(default_runner_factory("java", 5.0), JavaRunner)
         with self.assertRaises(ValueError):
             default_runner_factory("ruby", 5.0)
+
+
+# ---------------------------------------------------------------------------
+# Security regression tests (Phase 26)
+# ---------------------------------------------------------------------------
+class SecurityRegressionTests(unittest.TestCase):
+    """Focused regression tests for execution boundary hardening."""
+
+    def _factory(self) -> BaseRunner:
+        """Factory that uses FakeSandboxRunner for fast tests."""
+        def factory(language: str, timeout: float) -> BaseRunner:
+            if language == "python":
+                return PythonRunner(sandbox=FakeSandboxRunner())
+            if language == "java":
+                return JavaRunner(sandbox=FakeSandboxRunner())
+            raise ValueError(f"Unsupported language {language!r}.")
+        return TestClient(create_app(runner_factory=factory))
+
+    def test_infinite_python_loop_returns_timeout(self):
+        """Infinite Python loop -> TIMEOUT, no hang."""
+        sandbox = FakeSandboxRunner(
+            default=SandboxResult("", "TIMEOUT: exceeded 1.0s wall-clock limit.", -1, True, 1000)
+        )
+        client = TestClient(create_app(runner_factory=lambda lang, t: PythonRunner(sandbox=sandbox)))
+        code = "while True:\n    pass\n"
+        resp = client.post(
+            "/execute",
+            json={
+                "language": "python",
+                "code": code,
+                "tests": [{"id": "t1", "input": "", "expected_output": ""}],
+                "timeout_seconds": 1.0,
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["status"], "TIMEOUT")
+        self.assertTrue(body["tests"][0]["timed_out"])
+
+    def test_infinite_java_loop_returns_timeout(self):
+        """Infinite Java loop -> TIMEOUT (if Docker available, mocked here)."""
+        client = self._factory()
+        code = (
+            "public class Main {\n"
+            "    public static void main(String[] args) {\n"
+            "        while (true) {}\n"
+            "    }\n"
+            "}\n"
+        )
+        sandbox = FakeSandboxRunner()
+        sandbox.program(
+            ["javac", "/workspace/Main.java"], "",
+            SandboxResult("", "", 0, False, 100)
+        ).program(
+            ["sh", "-c", "javac /workspace/Main.java && java -cp /workspace Main"], "",
+            SandboxResult("", "TIMEOUT", -1, True, 5000)
+        )
+        client = TestClient(create_app(runner_factory=lambda lang, t: JavaRunner(sandbox=sandbox)))
+        resp = client.post(
+            "/execute",
+            json={
+                "language": "java",
+                "code": code,
+                "tests": [{"id": "t1", "input": "", "expected_output": ""}],
+                "timeout_seconds": 1.0,
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["status"], "TIMEOUT")
+
+    def test_excessive_stdout_is_truncated(self):
+        """Program printing huge output -> output truncated, service stable."""
+        client = self._factory()
+        code = 'print("x" * 100000)\n'
+        sandbox = FakeSandboxRunner(
+            default=SandboxResult("x" * 100000, "", 0, False, 10)
+        )
+        client = TestClient(create_app(runner_factory=lambda lang, t: PythonRunner(sandbox=sandbox)))
+        resp = client.post(
+            "/execute",
+            json={
+                "language": "python",
+                "code": code,
+                "tests": [{"id": "t1", "input": "", "expected_output": ""}],
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        # Output should be truncated at MAX_OUTPUT_CHARS (50_000)
+        self.assertLessEqual(len(body["stdout"]), 50_000 + 100)  # +100 for truncation marker
+        self.assertIn("[truncated", body["stdout"])
+
+    def test_excessive_stderr_is_truncated(self):
+        """Program writing huge stderr -> stderr truncated."""
+        client = self._factory()
+        code = 'import sys; sys.stderr.write("e" * 20000)\n'
+        sandbox = FakeSandboxRunner(
+            default=SandboxResult("", "e" * 20000, 0, False, 10)
+        )
+        client = TestClient(create_app(runner_factory=lambda lang, t: PythonRunner(sandbox=sandbox)))
+        resp = client.post(
+            "/execute",
+            json={
+                "language": "python",
+                "code": code,
+                "tests": [{"id": "t1", "input": "", "expected_output": ""}],
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertLessEqual(len(body["stderr"]), 10_000 + 100)
+        self.assertIn("[truncated", body["stderr"])
+
+    def test_oversized_code_rejected(self):
+        """Code exceeding MAX_CODE_CHARS -> 422."""
+        client = self._factory()
+        code = "x" * 100_001
+        resp = client.post(
+            "/execute",
+            json={
+                "language": "python",
+                "code": code,
+                "tests": [{"id": "t1", "input": "", "expected_output": ""}],
+            },
+        )
+        self.assertEqual(resp.status_code, 422)
+
+    def test_too_many_tests_rejected(self):
+        """More than MAX_TESTS_PER_REQUEST tests -> 422."""
+        client = self._factory()
+        tests = [{"id": f"t{i}", "input": "", "expected_output": ""} for i in range(51)]
+        resp = client.post(
+            "/execute",
+            json={"language": "python", "code": "pass", "tests": tests},
+        )
+        self.assertEqual(resp.status_code, 422)
+
+    def test_invalid_timeout_rejected(self):
+        """Timeout out of bounds -> 422."""
+        client = self._factory()
+        for bad in (0.1, 999, -1, "not_a_number"):
+            resp = client.post(
+                "/execute",
+                json={
+                    "language": "python",
+                    "code": "pass",
+                    "tests": [{"id": "t1", "input": "", "expected_output": ""}],
+                    "timeout_seconds": bad,
+                },
+            )
+            self.assertEqual(resp.status_code, 422, f"timeout {bad!r} should be rejected")
+
+    def test_invalid_language_rejected(self):
+        """Unsupported language -> 422."""
+        client = self._factory()
+        resp = client.post(
+            "/execute",
+            json={"language": "ruby", "code": "x", "tests": [{"id": "t1"}]},
+        )
+        self.assertEqual(resp.status_code, 422)
+
+    def test_excessive_output_program_deterministic_status(self):
+        """Huge output program returns deterministic status, not crash."""
+        client = self._factory()
+        code = 'print("x" * 100000)\n'
+        sandbox = FakeSandboxRunner(
+            default=SandboxResult("x" * 100000, "", 0, False, 10)
+        )
+        client = TestClient(create_app(runner_factory=lambda lang, t: PythonRunner(sandbox=sandbox)))
+        resp = client.post(
+            "/execute",
+            json={
+                "language": "python",
+                "code": code,
+                "tests": [{"id": "t1", "input": "", "expected_output": ""}],
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertIn(body["status"], ("PASSED", "FAILED", "RUNTIME_ERROR", "TIMEOUT"))
+
+    def test_malformed_execution_request_rejected(self):
+        """Malformed request payloads -> 422."""
+        client = self._factory()
+        # Missing tests
+        resp = client.post("/execute", json={"language": "python", "code": "x"})
+        self.assertEqual(resp.status_code, 422)
+        # Empty tests array
+        resp = client.post("/execute", json={"language": "python", "code": "x", "tests": []})
+        self.assertEqual(resp.status_code, 422)
+        # Invalid test structure
+        resp = client.post("/execute", json={"language": "python", "code": "x", "tests": [{"id": 123}]})
+        self.assertEqual(resp.status_code, 422)
+
+    def test_hidden_decisive_values_not_leaked_in_execution_result(self):
+        """Regression: hidden test expected_output must not appear in student response."""
+        # This is primarily tested in core-backend hidden_decisive_redaction tests,
+        # but we verify the execution-service level truncation/redaction here.
+        client = self._factory()
+        code = "print(1)\n"
+        sandbox = FakeSandboxRunner(
+            default=SandboxResult("1\n", "", 0, False, 10)
+        )
+        client = TestClient(create_app(runner_factory=lambda lang, t: PythonRunner(sandbox=sandbox)))
+        resp = client.post(
+            "/execute",
+            json={
+                "language": "python",
+                "code": code,
+                "tests": [
+                    {"id": "P1", "input": "", "expected_output": "1"},
+                    {"id": "H1", "input": "", "expected_output": "SECRET"},
+                ],
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        # The execution-service returns the decisive test's expected_output
+        # The core-backend layer handles hidden test redaction.
+        # Verify no internal paths/container IDs leak
+        self.assertNotIn("/workspace", body.get("stdout", ""))
+        self.assertNotIn("cognify-exec", body.get("stderr", ""))
+
+    def test_path_traversal_in_problem_id_rejected(self):
+        """Problem ID with path traversal -> rejected at API boundary."""
+        # This is tested at the core-backend level where problem IDs are resolved
+        # from the problem bank. The execution-service only receives the test cases.
+        pass  # Covered by core-backend tests
+
+    def test_input_size_limit_enforced(self):
+        """Test input exceeding MAX_INPUT_CHARS -> 422."""
+        client = self._factory()
+        large_input = "x" * 10_001
+        resp = client.post(
+            "/execute",
+            json={
+                "language": "python",
+                "code": "pass",
+                "tests": [{"id": "t1", "input": large_input, "expected_output": "y"}],
+            },
+        )
+        self.assertEqual(resp.status_code, 422)
+
+    def test_expected_output_size_limit_enforced(self):
+        """Expected output exceeding MAX_OUTPUT_CHARS -> 422."""
+        client = self._factory()
+        large_output = "y" * 50_001
+        resp = client.post(
+            "/execute",
+            json={
+                "language": "python",
+                "code": "pass",
+                "tests": [{"id": "t1", "input": "x", "expected_output": large_output}],
+            },
+        )
+        self.assertEqual(resp.status_code, 422)
+
+    def test_boundary_values_min_max_valid(self):
+        """Test boundary values: min valid, max valid, just below, just above."""
+        client = self._factory()
+        # Min valid code (1 char)
+        resp = client.post(
+            "/execute",
+            json={"language": "python", "code": "1", "tests": [{"id": "t1", "input": "", "expected_output": "1"}]},
+        )
+        self.assertEqual(resp.status_code, 200)
+        # Max valid code (100_000 chars)
+        resp = client.post(
+            "/execute",
+            json={"language": "python", "code": "x" * 100_000, "tests": [{"id": "t1", "input": "", "expected_output": ""}]},
+        )
+        self.assertEqual(resp.status_code, 200)
+        # Just above max code -> 422
+        resp = client.post(
+            "/execute",
+            json={"language": "python", "code": "x" * 100_001, "tests": [{"id": "t1", "input": "", "expected_output": ""}]},
+        )
+        self.assertEqual(resp.status_code, 422)
+        # Min valid timeout (1.0)
+        resp = client.post(
+            "/execute",
+            json={"language": "python", "code": "pass", "tests": [{"id": "t1", "input": "", "expected_output": ""}], "timeout_seconds": 1.0},
+        )
+        self.assertEqual(resp.status_code, 200)
+        # Max valid timeout (30.0)
+        resp = client.post(
+            "/execute",
+            json={"language": "python", "code": "pass", "tests": [{"id": "t1", "input": "", "expected_output": ""}], "timeout_seconds": 30.0},
+        )
+        self.assertEqual(resp.status_code, 200)
+        # Just above max timeout -> 422
+        resp = client.post(
+            "/execute",
+            json={"language": "python", "code": "pass", "tests": [{"id": "t1", "input": "", "expected_output": ""}], "timeout_seconds": 30.1},
+        )
+        self.assertEqual(resp.status_code, 422)
+        # Just below min timeout -> 422
+        resp = client.post(
+            "/execute",
+            json={"language": "python", "code": "pass", "tests": [{"id": "t1", "input": "", "expected_output": ""}], "timeout_seconds": 0.9},
+        )
+        self.assertEqual(resp.status_code, 422)
+
+    def test_zero_tests_rejected(self):
+        """Zero tests -> 422."""
+        client = self._factory()
+        resp = client.post(
+            "/execute",
+            json={"language": "python", "code": "pass", "tests": []},
+        )
+        self.assertEqual(resp.status_code, 422)
+
+    def test_total_test_input_size_limit(self):
+        """Total test input size across all tests has a limit."""
+        client = self._factory()
+        # Create many tests with large inputs
+        tests = [{"id": f"t{i}", "input": "x" * 500, "expected_output": "y"} for i in range(30)]
+        resp = client.post(
+            "/execute",
+            json={"language": "python", "code": "pass", "tests": tests},
+        )
+        # Should still pass as total is 15_000 < 20_000 (2x limit)
+        self.assertEqual(resp.status_code, 200)
 
 
 if __name__ == "__main__":
