@@ -176,6 +176,20 @@ def closed_loop_module() -> Any:
     return _ALIAS_CACHE["closed_loop"]
 
 
+def core_service_module(module_name: str) -> Any:
+    """Load another existing core-backend app module under the shared alias.
+
+    Additive Step 14 helper: ``learner_engine``, ``repositories`` and ``db``
+    resolve through the same alias mechanism (``cognify_core_app``), so no
+    second import system is needed. Existing helpers are unchanged.
+    """
+    if not isinstance(module_name, str) or not module_name.strip():
+        raise ValueError("module_name must be a non-empty string.")
+    return _load_service_module(
+        "cognify_core_app", _CORE_APP_DIR, module_name.strip()
+    )
+
+
 # ---------------------------------------------------------------------------
 # Execution (reuses the existing sandbox + evaluator; no new mechanism)
 # ---------------------------------------------------------------------------
@@ -517,6 +531,7 @@ __all__ = [
     "attempt_from_execution",
     "build_pack_for_submission",
     "closed_loop_module",
+    "core_service_module",
     "default_learner_snapshot",
     "diagnose_evidence",
     "diagnose_via_http",
