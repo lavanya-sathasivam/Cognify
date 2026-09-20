@@ -73,6 +73,72 @@ function mockFetch(routes: Record<string, unknown>) {
   });
 }
 
+function conceptsPayload() {
+  const card = (id: string, title: string, group: string) => ({
+    concept_id: id,
+    title,
+    description: `${title} scope.`,
+    group,
+    prerequisites: [],
+    status: id === "C3" ? "started" : "not_started",
+    band: id === "C3" ? "emerging" : "novice",
+    mastery_claim: false,
+    trend: id === "C3" ? "stable" : "unknown",
+    attempt_count: id === "C3" ? 2 : 0,
+    pass_count: id === "C3" ? 1 : 0,
+    fail_count: id === "C3" ? 1 : 0,
+    transfer: { attempts: 0, successes: 0, failures: 0, success_rate: 0 },
+    hint_dependence: 0,
+    hint_count: 0,
+    recent_history: [],
+    active_misconception_count: 0,
+  });
+  return {
+    session_id: "sess-home",
+    language_track: "python",
+    concepts: [
+      card("C1", "Variables, Types, Operators, I/O", "Foundations"),
+      card("C2", "Conditionals & Boolean Logic", "Control Flow"),
+      card("C3", "Loops & Iteration Control", "Control Flow"),
+      card("C4", "Functions / Methods, Parameters, Scope & Return", "Functions"),
+      card("C5", "Lists / Arrays & Strings", "Collections"),
+      card("C6", "Dictionaries / Maps, Sets & Nested Structures", "Collections"),
+      card("C7", "OOP: Classes, Objects, Encapsulation, Inheritance", "Objects"),
+      card("C8", "Recursion, Exceptions & Algorithmic Complexity Basics", "Recursion & Beyond"),
+    ],
+    next_action: {
+      action: "PRACTICE_PROBLEM",
+      reason: "Keep practicing to make the idea stick.",
+      problem_id: null,
+      problem_title: null,
+      concept_id: "C3",
+    },
+  };
+}
+
+function historyPayload() {
+  return {
+    session_id: "sess-home",
+    total: 1,
+    limit: 5,
+    items: [
+      {
+        order: 1,
+        created_at: "2026-09-20T10:00:00",
+        problem_id: "PY-C3-COUNT-DIV",
+        problem_title: "Count Divisible Numbers",
+        concept_id: "C3",
+        concept_title: "Loops & Iteration Control",
+        outcome: "failed",
+        execution_status: "FAILED",
+        is_transfer: false,
+        feedback: "Loop bounds identified — review the feedback and retry.",
+        verified: false,
+      },
+    ],
+  };
+}
+
 function renderHome() {
   return render(
     <SessionProvider>
@@ -131,6 +197,47 @@ test("home shows an honest empty recommendation state", async () => {
   );
   renderHome();
   expect(await screen.findByText("No recommendation yet")).toBeDefined();
+});
+
+test("home enriches with concept levels and recent activity", async () => {
+  vi.stubGlobal(
+    "fetch",
+    mockFetch({
+      "POST /student/sessions": sessionPayload(),
+      "GET /student/journey?session_id=sess-home": {
+        ...journeyPayload(),
+        recommendations: [],
+      },
+      "GET /student/concepts?session_id=sess-home": conceptsPayload(),
+      "GET /student/history?session_id=sess-home&limit=5": historyPayload(),
+    }),
+  );
+  renderHome();
+  // Backend next_action (not the journey list) drives the recommendation.
+  expect(
+    await screen.findByText("Keep practicing this concept to make it stick."),
+  ).toBeDefined();
+  expect(await screen.findByText("Where you stand")).toBeDefined();
+  expect(await screen.findByText(/2 attempts/)).toBeDefined();
+  expect(await screen.findByText("Recent activity")).toBeDefined();
+  expect(await screen.findByText(/Needs another attempt/)).toBeDefined();
+  expect(screen.queryByText(/C3-M01/)).toBeNull();
+});
+
+test("home still answers when enrichment fetches fail", async () => {
+  vi.stubGlobal(
+    "fetch",
+    mockFetch({
+      "POST /student/sessions": sessionPayload(),
+      "GET /student/journey?session_id=sess-home": journeyPayload(),
+    }),
+  );
+  renderHome();
+  // Journey state alone still answers "what's next".
+  expect(await screen.findByText("Keep working on the problem")).toBeDefined();
+  expect(
+    await screen.findByText("Practice a simpler variant of this idea first."),
+  ).toBeDefined();
 });
 
 test("home reports backend failure without fake content", async () => {

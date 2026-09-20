@@ -1,16 +1,26 @@
-/** Home: "what should I do next?" (Step 20A).
+/** Home: "what should I do next?" (Step 20B).
  *
- * Built only from existing endpoints (session + journey). Shows the live
- * C3 journey state and the stored next recommendation. No progress is
- * fabricated for other concepts.
+ * Built from live backend data only: the session/journey state plus the
+ * read-only concept overview (GET /student/concepts) and recent history
+ * (GET /student/history). The adaptive engine remains the source of
+ * truth — the recommendation shown here is the backend's next_action
+ * (falling back to the journey recommendation), humanized by lib/copy.
+ * Concept/history fetches are best-effort: if they fail, the page still
+ * answers from the journey state instead of inventing content.
  */
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "../components/session";
 import { ContinueCard, FreshSessionNote, NextStepCard } from "../components/cards";
-import { Card, Loading, PageHeading, SecondaryButton } from "../components/ui";
+import { Card, LevelLabel, Loading, PageHeading, SecondaryButton } from "../components/ui";
+import {
+  api,
+  type ConceptsResponse,
+  type HistoryResponse,
+} from "./lib/api";
+import { outcomeLabel } from "./lib/copy";
 
 export default function HomePage() {
   const {
@@ -18,21 +28,48 @@ export default function HomePage() {
     error,
     journey,
     session,
+    sessionId,
     problem,
     freshNotice,
     dismissNotice,
     restart,
     refresh,
   } = useSession();
+  const [concepts, setConcepts] = useState<ConceptsResponse | null>(null);
+  const [history, setHistory] = useState<HistoryResponse | null>(null);
 
-  // Recommendations live behind GET /student/journey; load them once the
-  // session is ready (the session payload alone carries no recommendations).
+  // Recommendations live behind GET /student/journey; concept and history
+  // views enrich the answer but must never block it.
   useEffect(() => {
     if (status === "ready") {
       void refresh();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
+
+  useEffect(() => {
+    if (status !== "ready" || !sessionId) return;
+    let cancelled = false;
+    api.getConcepts(sessionId).then(
+      (data) => {
+        if (!cancelled) setConcepts(data);
+      },
+      () => {
+        /* best-effort: journey state still answers "what's next" */
+      },
+    );
+    api.getHistory(sessionId, 5).then(
+      (data) => {
+        if (!cancelled) setHistory(data);
+      },
+      () => {
+        /* best-effort: home works without recent activity */
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [status, sessionId]);
 
   if (status === "loading") {
     return <Loading text="Loading your learning state…" />;
@@ -57,7 +94,19 @@ export default function HomePage() {
 
   const journeyState =
     journey?.journey_state ?? session?.journey_state ?? null;
-  const next = journey?.recommendations?.[0] ?? null;
+  const backendNext = concepts?.next_action ?? null;
+  const next = backendNext
+    ? {
+        action: backendNext.action,
+        reason: backendNext.reason,
+        problem_id: backendNext.problem_id,
+        problem_title: backendNext.problem_title,
+      }
+    : (journey?.recommendations?.[0] ?? null);
+  const started = (concepts?.concepts ?? []).filter(
+    (c) => c.status === "started",
+  );
+  const recent = history?.items?.slice(-2).reverse() ?? [];
 
   return (
     <div className="flex max-w-3xl flex-col gap-6">
@@ -99,6 +148,73 @@ export default function HomePage() {
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
             Submit a solution on the Practice page and Cognify will suggest
             what to do next based on how it went.
+          </p>
+        </Card>
+      )}
+
+      {started.length > 0 && (
+        <Card label="Where you stand">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            Where you stand
+          </p>
+          <ul className="mt-2 flex flex-col gap-2">
+            {started.map((c) => (
+              <li
+                key={c.concept_id}
+                className="flex flex-wrap items-center justify-between gap-2 text-sm"
+              >
+                <span>
+                  <span className="font-medium">
+                    {c.concept_id} · {c.title}
+                  </span>{" "}
+                  <span className="text-zinc-500 dark:text-zinc-400">
+                    · {c.attempt_count}{" "}
+                    {c.attempt_count === 1 ? "attempt" : "attempts"}
+                  </span>
+                </span>
+                <LevelLabel band={c.band} />
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+            Current level{started.length === 1 ? "" : "s"} above
+            {started.some((c) => c.mastery_claim)
+              ? " — a concept is mastered."
+              : " — nothing mastered yet; levels grow with verified practice."}{" "}
+            <Link
+              href="/progress"
+              className="font-medium text-teal-800 underline underline-offset-2 dark:text-teal-200"
+            >
+              Details
+            </Link>
+          </p>
+        </Card>
+      )}
+
+      {recent.length > 0 && (
+        <Card label="Recent activity">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            Recent activity
+          </p>
+          <ul className="mt-2 flex flex-col gap-1 text-sm">
+            {recent.map((item) => (
+              <li key={item.order}>
+                <span className="font-medium">
+                  {item.problem_title ?? "Problem"}
+                </span>{" "}
+                <span className="text-zinc-600 dark:text-zinc-300">
+                  — {outcomeLabel(item.outcome, item.verified)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-sm">
+            <Link
+              href="/history"
+              className="font-medium text-teal-800 underline underline-offset-2 dark:text-teal-200"
+            >
+              Full history
+            </Link>
           </p>
         </Card>
       )}

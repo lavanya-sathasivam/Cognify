@@ -71,6 +71,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
+from packages import taxonomy as taxonomy_pkg
 from packages.adaptive import (
     ConceptState,
     CurriculumInfo,
@@ -101,7 +102,41 @@ MAX_CODE_CHARS: int = 100_000
 TIMEOUT_SECONDS: float = 5.0
 MAX_VIEW_TEXT_CHARS: int = 2_000
 
+# Step 20B read-only student views (no learning-algorithm changes).
+DEFAULT_HISTORY_LIMIT: int = 20
+MAX_HISTORY_LIMIT: int = 50
+
+# Presentation grouping for the 8 concepts (Step 20B). The taxonomy owns
+# concept titles/descriptions/prerequisites and has NO group field, so this
+# ordering mirrors the existing frontend curriculum map
+# (apps/web/src/app/lib/concepts.ts) and stays identical to it. It is
+# display structure only: never an input to mastery, adaptive, or
+# verification logic.
+CONCEPT_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("Foundations", ("C1",)),
+    ("Control Flow", ("C2", "C3")),
+    ("Functions", ("C4",)),
+    ("Collections", ("C5", "C6")),
+    ("Objects", ("C7",)),
+    ("Recursion & Beyond", ("C8",)),
+)
+_GROUP_BY_CONCEPT: dict[str, str] = {
+    cid: group for group, members in CONCEPT_GROUPS for cid in members
+}
+
 _RULE_PREFIX_RE = re.compile(r"^Rule [A-Z0-9_]+:\s*")
+# Bank descriptions occasionally name the misconception they probe
+# (e.g. "...probe for C3-M05..."). The catalog is student-facing, so those
+# internal IDs are redacted the same way the frontend strips codes
+# (see apps/web/src/app/lib/copy.ts stripCodes): meaning preserved,
+# codes removed.
+_MISCONCEPTION_ID_RE = re.compile(r"\bC[1-8]-M\d{2}\b")
+
+
+def _safe_description(text: Any) -> Any:
+    if isinstance(text, str) and _MISCONCEPTION_ID_RE.search(text):
+        return _MISCONCEPTION_ID_RE.sub("this idea", text)
+    return text
 
 # Static student-facing copy per intervention type (presentation only; the
 # structured Step 15 contract carries the real content and the frontend
@@ -371,6 +406,130 @@ def verification_view(result: Any) -> dict[str, Any]:
         "outcome": outcome,
         "message": VERIFICATION_COPY.get(outcome, VERIFICATION_COPY["INCOMPLETE"]),
     }
+
+
+# ---------------------------------------------------------------------------
+# Step 20B read-only student views (delegate to existing engines only)
+# ---------------------------------------------------------------------------
+def _group_for_concept(concept_id: str) -> str:
+    """Presentation group for a concept (display only, never algorithmic)."""
+    return _GROUP_BY_CONCEPT.get(concept_id.strip().upper(), "Other")
+
+
+def _concept_card(concept_id: str, view: dict[str, Any]) -> dict[str, Any]:
+    """Student-safe per-concept card (no mastery floats, no internal IDs).
+
+    Reads taxonomy metadata (title/description/prerequisites) plus the
+    existing learner-engine view. Not-started concepts (zero attempts)
+    report honestly with ``status == "not_started"``; nothing is
+    fabricated. Active misconception IDs, isomorphic grouping, mastery
+    decimals, and evidence refs are deliberately omitted student-side.
+    """
+    concept = taxonomy_pkg.get_concept(concept_id)
+    transfer = view.get("transfer_breakdown", {}) or {}
+    recent = view.get("recent_history", []) or []
+    attempt_count = int(view.get("attempt_count", 0))
+    band = str(view.get("band", "unknown"))
+    return {
+        "concept_id": concept.id,
+        "title": concept.title,
+        "description": concept.description,
+        "group": _group_for_concept(concept.id),
+        "prerequisites": list(concept.prerequisites),
+        "status": "not_started" if attempt_count == 0 else "started",
+        "band": band,
+        "mastery_claim": band == "mastered",
+        "trend": view.get("trend", "unknown"),
+        "attempt_count": attempt_count,
+        "pass_count": int(view.get("pass_count", 0)),
+        "fail_count": int(view.get("fail_count", 0)),
+        "transfer": {
+            "attempts": int(transfer.get("attempts", 0)),
+            "successes": int(transfer.get("successes", 0)),
+            "failures": int(transfer.get("failures", 0)),
+            "success_rate": float(transfer.get("success_rate", 0.0)),
+        },
+        "hint_dependence": float(view.get("hint_dependence", 0.0)),
+        "hint_count": int(view.get("hint_count", 0)),
+        "recent_history": [
+            {
+                "problem_id": entry.get("problem_id"),
+                "passed": bool(entry.get("passed", False)),
+                "is_transfer": bool(entry.get("is_transfer", False)),
+                "hint_used": bool(entry.get("hint_used", False)),
+            }
+            for entry in recent[-3:]
+        ],
+        "active_misconception_count": len(view.get("active_misconception_ids", [])),
+    }
+
+
+def _next_action_view(rec: dict[str, Any], concept_id: str) -> dict[str, Any]:
+    """Student view of one adaptive recommendation (existing engine output).
+
+    Keeps the established Practice contract (action code + reason text for
+    frontend humanization, safe problem title) and adds the owning
+    concept so per-concept pages can attribute it. No adaptive rules live
+    here: the caller must supply ``explain_recommendations`` output.
+    """
+    problem_id = rec.get("problem_id")
+    title: str | None = None
+    if problem_id is not None:
+        try:
+            title = bank_loader.load_problem(problem_id).title
+        except (ValueError, TypeError):
+            title = None
+    return {
+        "action": rec.get("action_type"),
+        "reason": rec.get("reason"),
+        "problem_id": problem_id,
+        "problem_title": title,
+        "concept_id": concept_id,
+    }
+
+
+def _full_problem_catalog() -> list[ProblemInfo]:
+    """Whole-bank adaptive catalog (discovers future problems via loader)."""
+    catalog: list[ProblemInfo] = []
+    for problem in bank_loader.load_all_problems().values():
+        catalog.append(
+            ProblemInfo.from_dict(
+                {
+                    "problem_id": problem.problem_id,
+                    "concept_id": problem.concept_id,
+                    "difficulty": problem.difficulty,
+                    "isomorphic_group_id": problem.isomorphic_group_id,
+                    "variant_role": problem.variant_role,
+                }
+            )
+        )
+    return catalog
+
+
+def _human_issue_summary(misconception_id: str) -> str:
+    """Student-safe one-liner for a diagnosed issue (never leaks the ID)."""
+    try:
+        name = taxonomy_pkg.get_misconception(misconception_id).name
+    except (KeyError, ValueError, TypeError):
+        return "An issue was identified — review the feedback and retry."
+    words = str(name).replace("-", " ").replace("_", " ").strip() or "this idea"
+    label = words[0].upper() + words[1:]
+    return f"{label} identified — review the feedback and retry."
+
+
+def _history_feedback(
+    *, passed: bool, is_transfer: bool, execution_status: str, misconception_id: str | None
+) -> str:
+    """Human sentence for one attempt (presentation only, no logic)."""
+    if passed:
+        if is_transfer:
+            return "Solved correctly in a new context."
+        return "Solved correctly."
+    if misconception_id:
+        return _human_issue_summary(misconception_id)
+    if execution_status in ("RUNTIME_ERROR", "COMPILE_ERROR", "TIMEOUT"):
+        return "Needs another attempt — the code didn't run cleanly."
+    return "Needs another attempt — review the feedback and retry."
 
 
 # ---------------------------------------------------------------------------
@@ -787,6 +946,181 @@ def create_student_router(
             "recommendations": record.recommendations,
         }
 
+    @router.get("/concepts")
+    def get_concepts(session_id: str) -> dict[str, Any]:
+        """READ-ONLY per-concept learner state for all 8 concepts (Step 20B).
+
+        Delegates to the existing taxonomy (metadata) + learner-engine
+        views (state) + adaptive engine (next action). Never writes:
+        no ``record_attempt``, no events, no commits — the session is
+        rolled back before returning so repeated GETs cannot change
+        learner state.
+        """
+        record = store.get(session_id)
+        db_session = _db_session(record)
+        try:
+            views: dict[str, dict[str, Any]] = {}
+            for cid in taxonomy_pkg.list_concept_ids():
+                views[cid] = learner_engine.get_concept_view(
+                    db_session, record.journey_id, cid
+                )
+            concepts = [_concept_card(cid, views[cid]) for cid in views]
+            # Existing adaptive engine over the full curriculum (no
+            # duplicated rules): states + active misconceptions + taxonomy
+            # curricula + whole-bank catalog.
+            states = [ConceptState.from_learner_view(v) for v in views.values()]
+            misconceptions: list[MisconceptionState] = []
+            for cid, view in views.items():
+                for mid in view.get("active_misconception_ids", []):
+                    misc_view = learner_engine.get_misconception_view(
+                        db_session, record.journey_id, cid, mid
+                    )
+                    misconceptions.append(
+                        MisconceptionState.from_misconception_view(misc_view)
+                    )
+            curricula = [
+                CurriculumInfo.from_taxonomy(cid) for cid in views
+            ]
+            from packages.adaptive import explain_recommendations
+
+            ranked = recommend_next_actions(
+                states,
+                misconceptions,
+                curricula,
+                _full_problem_catalog(),
+                language_track=record.language_track,
+            )
+            explained = explain_recommendations(ranked)
+            next_action: dict[str, Any] | None = None
+            if explained:
+                top = explained[0]
+                next_action = _next_action_view(top, str(top.get("concept_id")))
+            return {
+                "session_id": session_id,
+                "language_track": record.language_track,
+                "concepts": concepts,
+                "next_action": next_action,
+            }
+        finally:
+            db_session.rollback()
+            db_session.close()
+
+    @router.get("/history")
+    def get_history(session_id: str, limit: int = DEFAULT_HISTORY_LIMIT) -> dict[str, Any]:
+        """READ-ONLY student-safe learning history (Step 20B).
+
+        Built from the existing append-only attempt events only — no
+        parallel store. Whitelisted fields: hidden test outputs,
+        reference solutions, misconception IDs, isomorphic grouping, and
+        evidence refs are never serialized. Never writes (rollback
+        before returning).
+        """
+        if type(limit) is not int or limit < 1:
+            raise HTTPException(
+                status_code=422, detail="limit must be a positive int."
+            )
+        capped = min(limit, MAX_HISTORY_LIMIT)
+        record = store.get(session_id)
+        db_session = _db_session(record)
+        try:
+            events = repositories.list_events_for_journey(
+                db_session, record.journey_id, event_type="attempt"
+            )
+            total = len(events)
+            tail = events[-capped:] if total else []
+            verified_outcome = (record.verification or {}).get("outcome")
+            items: list[dict[str, Any]] = []
+            for index, event in enumerate(tail, start=total - len(tail) + 1):
+                meta = dict(event.event_metadata or {})
+                problem_id = meta.get("problem_id")
+                concept_id = event.concept_id
+                try:
+                    problem_title = (
+                        bank_loader.load_problem(problem_id).title
+                        if isinstance(problem_id, str) and problem_id
+                        else None
+                    )
+                except (ValueError, TypeError):
+                    problem_title = None
+                try:
+                    concept_title = taxonomy_pkg.get_concept(concept_id).title
+                except (KeyError, ValueError, TypeError):
+                    concept_title = None
+                passed = bool(meta.get("passed", meta.get("success", False)))
+                status = str(meta.get("execution_status", "")).strip().upper()
+                is_transfer = bool(meta.get("is_transfer", False))
+                mid = event.misconception_id
+                created = event.created_at
+                items.append(
+                    {
+                        "order": index,
+                        "created_at": created.isoformat() if created is not None else None,
+                        "problem_id": problem_id,
+                        "problem_title": problem_title,
+                        "concept_id": concept_id,
+                        "concept_title": concept_title,
+                        "outcome": "passed" if passed else "failed",
+                        "execution_status": status,
+                        "is_transfer": is_transfer,
+                        "feedback": _history_feedback(
+                            passed=passed,
+                            is_transfer=is_transfer,
+                            execution_status=status,
+                            misconception_id=mid,
+                        ),
+                        "verified": bool(
+                            passed
+                            and is_transfer
+                            and verified_outcome == "VERIFIED_IMPROVED"
+                        ),
+                    }
+                )
+            return {
+                "session_id": session_id,
+                "total": total,
+                "limit": capped,
+                "items": items,
+            }
+        finally:
+            db_session.rollback()
+            db_session.close()
+
+    @router.get("/problems")
+    def list_problems(session_id: str) -> dict[str, Any]:
+        """READ-ONLY safe problem catalog from the existing bank (Step 20B).
+
+        Discovered via ``load_all_problems`` so future bank additions
+        appear with no endpoint change. Exposes metadata only: no test
+        cases, no hidden outputs, no misconception bindings, no
+        isomorphic grouping (kept hidden per the submission safety
+        contract), no reference solutions.
+        """
+        record = store.get(session_id)
+        entries: list[dict[str, Any]] = []
+        for problem in bank_loader.load_all_problems().values():
+            try:
+                concept_title = taxonomy_pkg.get_concept(problem.concept_id).title
+            except (KeyError, ValueError, TypeError):
+                concept_title = None
+            entries.append(
+                {
+                    "problem_id": problem.problem_id,
+                    "title": problem.title,
+                    "language": problem.language,
+                    "concept_id": problem.concept_id,
+                    "concept_title": concept_title,
+                    "difficulty": problem.difficulty,
+                    "role": problem.variant_role,
+                    "description": _safe_description(problem.description),
+                }
+            )
+        return {
+            "session_id": session_id,
+            "language_track": record.language_track,
+            "total": len(entries),
+            "problems": entries,
+        }
+
     return router
 
 
@@ -801,6 +1135,9 @@ __all__ = [
     "SessionCreate",
     "StudentStore",
     "SubmissionCreate",
+    "CONCEPT_GROUPS",
+    "DEFAULT_HISTORY_LIMIT",
+    "MAX_HISTORY_LIMIT",
     "create_student_router",
     "diagnosis_view",
     "execution_view",

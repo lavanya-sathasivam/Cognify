@@ -148,6 +148,113 @@ export interface JourneyResponse {
   recommendations: RecommendationView[];
 }
 
+/** Per-concept learner state (Step 20B, student-safe).
+ *
+ * No raw mastery decimals, no misconception IDs, no isomorphic grouping:
+ * only bands, counts, trends, and human-safe summaries. `status` is
+ * "not_started" when the concept has zero attempts — the UI must render
+ * that honestly instead of inventing progress.
+ */
+export interface ConceptTransfer {
+  attempts: number;
+  successes: number;
+  failures: number;
+  success_rate: number;
+}
+
+export interface ConceptRecentAttempt {
+  problem_id: string | null;
+  passed: boolean;
+  is_transfer: boolean;
+  hint_used: boolean;
+}
+
+export interface ConceptCard {
+  concept_id: string;
+  title: string;
+  description: string;
+  group: string;
+  prerequisites: string[];
+  status: "not_started" | "started";
+  band: string;
+  mastery_claim: boolean;
+  trend: string;
+  attempt_count: number;
+  pass_count: number;
+  fail_count: number;
+  transfer: ConceptTransfer;
+  hint_dependence: number;
+  hint_count: number;
+  recent_history: ConceptRecentAttempt[];
+  active_misconception_count: number;
+}
+
+/** Adaptive next action (Step 20B). Same contract as RecommendationView:
+ * `action` codes and `reason` text are humanized by lib/copy, never shown
+ * raw (except in ?debug=1).
+ */
+export interface NextActionView {
+  action: string | null;
+  reason: string | null;
+  problem_id: string | null;
+  problem_title: string | null;
+  concept_id: string | null;
+}
+
+export interface ConceptsResponse {
+  session_id: string;
+  language_track: string;
+  concepts: ConceptCard[];
+  next_action: NextActionView | null;
+}
+
+/** One student-safe history entry (Step 20B). `feedback` is a human
+ * sentence; `verified` is true only for the transfer pass that verified
+ * improvement. No hidden outputs, IDs, or groupings are included.
+ */
+export interface HistoryItem {
+  order: number;
+  created_at: string | null;
+  problem_id: string | null;
+  problem_title: string | null;
+  concept_id: string;
+  concept_title: string | null;
+  outcome: "passed" | "failed";
+  execution_status: string;
+  is_transfer: boolean;
+  feedback: string;
+  verified: boolean;
+}
+
+export interface HistoryResponse {
+  session_id: string;
+  total: number;
+  limit: number;
+  items: HistoryItem[];
+}
+
+/** Safe problem-catalog entry (Step 20B). Metadata only: no tests, no
+ * hidden outputs, no misconception bindings, no isomorphic grouping, no
+ * reference solutions. Descriptions are redacted server-side.
+ */
+export interface ProblemCatalogEntry {
+  problem_id: string;
+  title: string;
+  language: string;
+  concept_id: string;
+  concept_title: string | null;
+  difficulty: number;
+  role: string;
+  description: string;
+}
+
+export interface ProblemsResponse {
+  session_id: string;
+  language_track: string;
+  total: number;
+  problems: ProblemCatalogEntry[];
+}
+
 export const api = {
   createSession(): Promise<SessionResponse> {
     return request<SessionResponse>("/student/sessions", {
@@ -177,6 +284,21 @@ export const api = {
   getProblem(sessionId: string, problemId: string): Promise<ProblemView> {
     return request<ProblemView>(
       `/student/problems/${encodeURIComponent(problemId)}?session_id=${encodeURIComponent(sessionId)}`,
+    );
+  },
+  getConcepts(sessionId: string): Promise<ConceptsResponse> {
+    return request<ConceptsResponse>(
+      `/student/concepts?session_id=${encodeURIComponent(sessionId)}`,
+    );
+  },
+  getHistory(sessionId: string, limit = 20): Promise<HistoryResponse> {
+    return request<HistoryResponse>(
+      `/student/history?session_id=${encodeURIComponent(sessionId)}&limit=${encodeURIComponent(String(limit))}`,
+    );
+  },
+  getProblems(sessionId: string): Promise<ProblemsResponse> {
+    return request<ProblemsResponse>(
+      `/student/problems?session_id=${encodeURIComponent(sessionId)}`,
     );
   },
 };

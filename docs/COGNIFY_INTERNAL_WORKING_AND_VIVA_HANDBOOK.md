@@ -7,8 +7,9 @@
 > Status labels are used everywhere: `[IMPLEMENTED]`, `[PARTIALLY IMPLEMENTED]`, `[PLANNED / NOT IMPLEMENTED]`.
 > Anything inferred from code (not stated in comments/docs) is marked `Inferred from implementation.`
 >
-> - **Repository state at time of writing:** implementation through **Step 20A complete** (per `README.md`);
->   **Step 20B (backend per-concept/history endpoints) has NOT been started.**
+> - **Repository state at time of writing:** implementation through **Step 20B complete** (per `README.md`);
+>   read-only student data APIs (`GET /student/concepts`, `GET /student/history`,
+>   `GET /student/problems`) light up Learn/Progress/History/Home with real learner state.
 > - **Date of writing:** 2026-09-20. No application code was modified to produce this document.
 > - **Service ports (local):** core-backend `8000` · ai-service `8001` · execution-service `8002` · web `3000`.
 
@@ -360,7 +361,7 @@ File classes: **CORE FILE** (must know for viva) · **IMPORTANT SUPPORT FILE** (
 | File | Responsibility | Called By | Calls | Important Functions/Classes | Why It Exists |
 |---|---|---|---|---|---|
 | `main.py` | App factory: `FastAPI(title="cognify-core-backend", version="0.2.0")`, CORS from `STUDENT_CORS_ORIGINS` (default `http://localhost:3000`), mounts `GET /health` + student router. Injectable `runner_factory/llm_client/store` for tests. | `uvicorn app.main:app`; tests via `create_app(...)`. | `student.create_student_router`. | `create_app(*, runner_factory, llm_client, store)`, `health()`, `_cors_origins()`. | Single entrypoint; keeps prod wiring separate from test injection. |
-| `student.py` (811 lines) | Student vertical slice: 4 endpoints, server-side problem resolution, execution dispatch, evidence→diagnosis→record→intervene→verify→recommend orchestration. Contains NO intelligence (delegates to Steps 5–15 APIs). C3 constants `CANONICAL_ID=PY-C3-COUNT-DIV`, `TRANSFER_ID=…-TRANSFER`, `PROBE_ID=PY-C3-LOOP-MISCONCEPTION`, caps `MAX_CODE_CHARS=100_000`, `TIMEOUT_SECONDS=5.0`, view truncation `2_000`. | `main.create_app`; browser via HTTP. | `execution_client`, `problem_bank.loader/pipeline`, `learner_engine`, `closed_loop`, `adaptive`, `verification`, ai `interventions` (alias-loaded in-process). | `create_student_router`, `StudentStore` (process-local dict + per-session in-memory SQLite), `_resolve_problem`, `_execute`, `_submit_transfer`, `problem_view/execution_view/diagnosis_view/intervention_view/recommendation_view/verification_view`, `_journey_state`, `_catalog`. | The one file that turns “HTTP request” into “learning-loop step”. Spoofing/hidden-test/redaction guards live here. |
+| `student.py` (~1150 lines) | Student vertical slice: 7 endpoints (4 Step-16 loop endpoints + 3 Step-20B read-only views), server-side problem resolution, execution dispatch, evidence→diagnosis→record→intervene→verify→recommend orchestration. Contains NO intelligence (delegates to Steps 5–15 APIs; Step 20B additionally delegates per-concept state to taxonomy + learner-engine views, the next action to `recommend_next_actions`, history to existing attempt events, the catalog to `load_all_problems`). C3 constants `CANONICAL_ID=PY-C3-COUNT-DIV`, `TRANSFER_ID=…-TRANSFER`, `PROBE_ID=PY-C3-LOOP-MISCONCEPTION`, caps `MAX_CODE_CHARS=100_000`, `TIMEOUT_SECONDS=5.0`, view truncation `2_000`, history `DEFAULT_LIMIT=20/MAX_LIMIT=50`, display-only `CONCEPT_GROUPS` (taxonomy has no group field). | `main.create_app`; browser via HTTP. | `execution_client`, `problem_bank.loader/pipeline`, `learner_engine`, `closed_loop`, `adaptive`, `verification`, ai `interventions` (alias-loaded in-process). | `create_student_router`, `StudentStore` (process-local dict + per-session in-memory SQLite), `_resolve_problem`, `_execute`, `_submit_transfer`, `problem_view/execution_view/diagnosis_view/intervention_view/recommendation_view/verification_view`, `_journey_state`, `_catalog`, `_concept_card/_next_action_view/_full_problem_catalog/_human_issue_summary/_history_feedback/_safe_description` (Step 20B view helpers). | The one file that turns “HTTP request” into “learning-loop step”. Spoofing/hidden-test/redaction guards live here (20B adds MID/iso/mastery-float/evidence-ref redaction + bank-description MID scrub). |
 | `execution_client.py` | ONLY production execution integration: builds payload, `httpx.post(EXECUTION_SERVICE_URL + /execute)`, deep-validates response, maps failures (unreachable/5xx → `ExecutionServiceUnavailable` → HTTP 503; malformed → `BadResponse` → 502). Never executes locally, never imports Docker. | `student._execute` (production branch). | `httpx` → execution-service. | `build_payload`, `validate_response`, `execute_problem`, `get_base_url`; `VALID_STATUSES={PASSED,FAILED,COMPILE_ERROR,RUNTIME_ERROR,TIMEOUT}`. HTTP timeout = `max(10, timeout*(n_tests+1)+10)`. | Keeps the orchestrator honest: sandbox outage fails closed instead of silently grading locally. |
 | `learner_engine.py` (1024 lines) | Learner Model + Mastery owner. ONLY writer of learner state. `record_attempt` validates → computes mastery via `packages.mastery` → updates counters → recurring evaluation → improvement sweep → appends `attempt/diagnosis/mastery_transition(+recurring_*)` events. Read views `get_concept_view/get_misconception_view`, explainer `explain_mastery`, DTO exporter `snapshot_for_evidence`. | `student.py`, `closed_loop.run_closed_loop`, tests. | `repositories`, `packages.mastery.formula/weakness`, `packages.evidence.models`, `problem_schema.normalize_variant_role`. | `ensure_concept_state` (fresh → `INITIAL_MASTERY=0.20/novice/unknown`), `record_attempt(...)` (full signature §K), `get_concept_view`, `get_misconception_view`, `explain_mastery`, `snapshot_for_evidence`. | Dibs on state: AI must never write here (`db.py` forbids AI imports). All mastery/counter/flag/event mutations funnel through this file. |
 | `closed_loop.py` (953 lines) | Verification → learner → adaptive orchestration: `VerificationResult → plan_records → record_attempt → views → recommend_next_actions → ClosedLoopResult`. Pure planning (`plan_records`: INCOMPLETE→0, NOT→1, SURFACE/VERIFIED→2 records) + `run_closed_loop` (validates journey/user/track match; INCOMPLETE mutates nothing). | `student._submit_transfer`; tests. | `learner_engine`, `adaptive`, `verification`, `repositories`. | `ClosedLoopContext` (frozen, validated), `AttemptPlan`, `plan_records`, `RecordedAttempt`, `LearnerStateSnapshot`, `ClosedLoopResult`, `run_closed_loop`, `build_closed_loop_reason`. Constants `ORIGINAL_KIND=original_retry/TRANSFER…`, `EXECUTION_STATUS_FOR_OUTCOME` map. | Separates “what should be recorded” (pure plan) from “record it” (DB writes) so the mapping is testable without a database. |
@@ -429,14 +430,14 @@ File classes: **CORE FILE** (must know for viva) · **IMPORTANT SUPPORT FILE** (
 
 | File | Class | Responsibility | Calls | Key contents |
 |---|---|---|---|---|
-| `app/lib/api.ts` | CORE | Typed wrappers over core-backend ONLY. `BASE_URL = NEXT_PUBLIC_CORE_BACKEND_URL ?? http://localhost:8000`. Exactly 4 fns + `ApiError/friendlyError` (0→“Backend unreachable”, 409→finish-current, 503→execution-unavailable). | `fetch` → `/student/*`. | `createSession/submit/getJourney/getProblem`; views `Problem/Execution/Diagnosis(confidence_label likely\|possible\|uncertain)/Intervention/Recommendation/Verification/JourneyState/Submission/Session`. |
+| `app/lib/api.ts` | CORE | Typed wrappers over core-backend ONLY. `BASE_URL = NEXT_PUBLIC_CORE_BACKEND_URL ?? http://localhost:8000`. Exactly 7 fns + `ApiError/friendlyError` (0→“Backend unreachable”, 409→finish-current, 503→execution-unavailable). | `fetch` → `/student/*`. | `createSession/submit/getJourney/getProblem/getConcepts/getHistory/getProblems`; views `Problem/Execution/Diagnosis(confidence_label likely\|possible\|uncertain)/Intervention/Recommendation/Verification/JourneyState/Submission/Session/ConceptCard/NextActionView/HistoryItem/HistoryResponse/ProblemCatalogEntry/ProblemsResponse`. |
 | `app/practice/page.tsx` | CORE | Practice screen state machine: `MAX_CODE_CHARS=100_000` (mirrors backend), `requestId` guard (newest submit wins), starter-code init, `submit/continueToTransfer/retry`, `role="alert"` + `aria-live="polite"`. | `api`, `components/practice`. | `PracticePage`, `submit()`, `continueToTransfer()`. |
 | `components/practice.tsx` | CORE | `ProblemPanel` (never shows tests internals beyond inputs policy), `CodeEditor` (textarea + Cmd/Ctrl+Enter + Running…), `ResultPanel` (PASSED/transfer-verified/FAILED/error branches), `FailedFeedback` (passed X/Y, TestList w/ hidden redaction, certainty heading, explanation, InterventionCard, Retry), `RecommendationList` (top 3), `DebugDetails` (raw IDs only with `?debug=1`). | `lib/copy` (`stripCodes/humanizeReason/isDebugMode`). | All above; `verified = outcome==="VERIFIED_IMPROVED"`. |
 | `components/session.tsx` | CORE | Throwaway session: `localStorage["cognify.session_id"]`, `boot()` (fresh or `getJourney`+enrich; 404→fresh “session expired”), `refresh/restart/startFresh`, `SessionProvider/useSession`, `FreshSessionNote`. | `api`. | `STORAGE_KEY`, `boot/startFresh/refresh/restart`. |
-| `app/page.tsx` | IMPORTANT | Home “what next”: `ContinueCard` (journey/session state) + `NextStepCard` (first recommendation) or “No recommendation yet”. | `api/session/cards`. | `HomePage`. |
-| `app/learn/page.tsx` | IMPORTANT | Roadmap: only `LIVE_CONCEPT="C3"` live; others “coming”. | `lib/concepts`, `api`. | `LearnPage`, `CONCEPT_GROUPS`. |
-| `app/progress/page.tsx` | IMPORTANT | C3 card: stage→words (`started/practicing/retry_passed/transfer_done`), `mastery_claim ? Strong : Not yet`. Others “Not started yet”. | `api`. | `ProgressPage`. |
-| `app/history/page.tsx` | IMPORTANT | Honest empty state (no history endpoint exists — Step 20B not started). | none. | `HistoryPage`. |
+| `app/page.tsx` | IMPORTANT | Home “what next”: `ContinueCard` (journey/session state) + `NextStepCard` (backend `next_action` first, journey recommendation fallback) + best-effort “Where you stand” (started-concept levels) + “Recent activity” (last history items); enrichment failures degrade to journey-only content. | `api/session/cards`. | `HomePage`. |
+| `app/learn/page.tsx` | IMPORTANT | Roadmap from `GET /student/concepts`: all 8 concepts grouped by backend `group`, live band/trend/attempts per concept, honest “Not started yet” for zero-attempt concepts; loading + error + retry states. | `api`, `lib/copy` (`trendLabel`). | `LearnPage`. |
+| `app/progress/page.tsx` | IMPORTANT | Learner overview from `GET /student/concepts`: level labels (never raw numbers), trend/attempts/recent/transfer/hint-reliance in plain language, “current level” vs `mastery_claim` kept distinct, adaptive `next_action` via `NextStepCard`; honest empty + error states. | `api`, `cards`, `lib/copy`. | `ProgressPage`. |
+| `app/history/page.tsx` | IMPORTANT | Real history from `GET /student/history`: problem/concept titles, human outcome + feedback, verified-improvement flags; loading + error + honest empty states; no raw codes. | `api`, `lib/copy` (`outcomeLabel/stripCodes`). | `HistoryPage`. |
 | `components/cards.tsx` / `layout.tsx` / `ui.tsx` | SUPPORT | `ContinueCard/NextStepCard/FreshSessionNote`; nav Home/Learn/Practice/Progress/History + “current language: Python”; primitives `Card/PageHeading/PrimaryButton/Alert/Loading/EmptyState/LevelLabel/Mark`. | — | — |
 | `app/lib/copy.ts` / `concepts.ts` | SUPPORT | Humanization: `stripCodes` (C3-M01→“this idea”, SCREAMING_SNAKE→“this step”), `humanizeReason`, `isDebugMode`; static 8-concept/6-group map (NOT learner state). | — | — |
 
@@ -444,7 +445,7 @@ File classes: **CORE FILE** (must know for viva) · **IMPORTANT SUPPORT FILE** (
 
 | File | Class | Notes |
 |---|---|---|
-| `README.md` (832 lines) | REFERENCE ONLY (but viva-critical) | Declares Steps 0–20A done, 20B not started; C3 slice; rules; ports; 24 problems; limits; test counts; prototype constraints. |
+| `README.md` | REFERENCE ONLY (but viva-critical) | Declares Steps 0–20B done; C3 slice; rules; ports; 24 problems; limits; test counts; prototype constraints. |
 | `docker-compose.yml` / `Dockerfile` / `requirements.txt` / `.env(.example)` / `services/*/.env.example` | CONFIGURATION | §F/§G details; single shared image; `EXECUTION_SERVICE_URL/AI_SERVICE_URL` wiring; `LLM_PROVIDER=` empty default; `DATABASE_URL` prototype placeholder (asyncpg URL incompatible with sync engine — reserved). |
 | `problem-bank/python/*.json` (24) + `*_canonical.py` (24) | DATA | Schema §Q; canonical files are DATA ONLY (“NEVER executed by the pipeline”). |
 | `services/*/tests/*.py`, `packages/*/tests/*.py`, `apps/web/**/__tests__/*` | TEST | Step-wise regression (smoke, student flow, closed loop, execution client, learner intelligence/model, mastery, diagnosis, step15, execution, evidence, schema, taxonomy, verification, bank steps 12/13/14/19, frontend vitest). |
@@ -525,6 +526,9 @@ File classes: **CORE FILE** (must know for viva) · **IMPORTANT SUPPORT FILE** (
 | `GET` | `/student/problems/{problem_id}?session_id=…` | Fetch a problem view (safe fields only). | query `session_id` | `problem_view` (no tests/answers) | bank loader | none (404 unknown session; 422 wrong journey/role/language) |
 | `POST` | `/student/submissions` | Submit code; runs the whole loop branch (fail→diagnose→record→intervene; pass→unlock; transfer→verify→closed-loop). | `{session_id, problem_id, code}` (extras ignored; empty→422; >100k→422) | branch-dependent (§E steps 10/14/19: execution + diagnosis? + intervention? + recommendations + transfer? + verification? + journey_state) | execution_client → sandbox; evidence builder; diagnosis; learner_engine; adaptive; verification; closed_loop | Records attempts (FAILED/error always; verification-driven for passes); commits; stashes canonical pass; transfer-before-pass → 409; exec-down → 503; bad-response → 502 |
 | `GET` | `/student/journey?session_id=…` | Read-only journey snapshot (stage, band, mastery_claim, verification, recommendations). | query `session_id` | `{session_id, language_track, canonical_problem_id, transfer_problem_id, journey_state, verification, recommendations}` | learner views + adaptive | none |
+| `GET` | `/student/concepts?session_id=…` | Read-only per-concept state for all 8 concepts + adaptive next action (Step 20B). | query `session_id` | `{session_id, language_track, concepts[8] (taxonomy metadata + band/trend/counts/transfer/hints/recent-3, no mastery floats, no MID/iso), next_action}` | taxonomy + `get_concept_view/get_misconception_view` + `recommend_next_actions` over full-bank catalog | none (rollback before return; repeated GETs identical) |
+| `GET` | `/student/history?session_id=…&limit=…` | Read-only student-safe attempt history (Step 20B). | query `session_id`, `limit` default 20, clamped to 50, `<1` → 422 | `{session_id, total, limit, items[] (order/created_at/problem+concept titles/outcome/feedback/verified)}` | existing append-only `attempt` events + bank/taxonomy titles | none (rollback before return) |
+| `GET` | `/student/problems?session_id=…` | Read-only safe problem catalog from the bank loader (Step 20B). | query `session_id` | `{session_id, language_track, total, problems[] (id/title/language/concept+difficulty/role/redacted description)}` | `load_all_problems` (discovers future additions) | none (no tests/MIDs/iso/solutions serialized) |
 
 **AI service (`cognify-ai-service v0.2.0`, base `http://localhost:8001`) — `[IMPLEMENTED]`:**
 
@@ -541,8 +545,9 @@ File classes: **CORE FILE** (must know for viva) · **IMPORTANT SUPPORT FILE** (
 | `GET` | `/languages` | Advertised runtimes. | — | `{languages: [python, java]}` | none | none |
 | `POST` | `/execute` | Run code vs tests in Docker sandbox. | `{language, code, tests[1..50], timeout_seconds ∈ [1,30]}` (empty code / >100k / bad language → 422) | `ExecutionResult` (status, per-test results, passed/failed counts, decisive pointers) | runner → Docker sandbox | Containers + temp volume created then removed; Docker-down → 503 |
 
-**`[PLANNED / NOT IMPLEMENTED]` endpoints:** per-concept progress, attempt-history list, `DELETE`/reset,
-auth/login, instructor dashboard, problem CRUD — none exist in code (history page + Step-20B note confirm).
+**`[PLANNED / NOT IMPLEMENTED]` endpoints:** `DELETE`/reset, auth/login, instructor dashboard,
+problem CRUD — none exist in code. (Per-concept progress, attempt-history list, and the problem
+catalog shipped as read-only Step 20B endpoints — see the three `GET` rows above.)
 
 ### F.2 Request lifecycle: `POST /student/submissions` (the whole viva in one diagram)
 
@@ -1340,20 +1345,24 @@ Every problem: **2 public + 3 hidden = 5 tests** (verified across the bank). All
 
 ## R — Frontend
 
-`[IMPLEMENTED]` for the C3 demo slice; non-C3 concepts and history are honest placeholders
-(Step 20B not started). Stack: **Next.js 16 + React 19 + Tailwind 4** (`apps/web/package.json`),
+`[IMPLEMENTED]` for the C3 demo slice; Learn/Progress/History/Home render real learner state
+from the read-only Step 20B endpoints (non-C3 concepts honestly report “Not started yet” until
+they have attempts). Stack: **Next.js 16 + React 19 + Tailwind 4** (`apps/web/package.json`),
 Vitest + jsdom + Testing Library for tests, empty `next.config.ts`.
 
 ### Architecture (current, verified)
 
-- **API client** (`app/lib/api.ts`): 4 typed wrappers over core-backend ONLY —
-  `createSession / submit / getJourney / getProblem`; base URL `NEXT_PUBLIC_CORE_BACKEND_URL ??
+- **API client** (`app/lib/api.ts`): 7 typed wrappers over core-backend ONLY —
+  `createSession / submit / getJourney / getProblem / getConcepts / getHistory / getProblems`;
+  base URL `NEXT_PUBLIC_CORE_BACKEND_URL ??
   http://localhost:3000→http://localhost:8000`. `ApiError` + `friendlyError` map 0→“Backend
   unreachable”, 409→“Finish the current problem…”, 503→“execution unavailable”. No intelligence.
-- **Routes (5):** `/` Home (“what next”: ContinueCard + first-recommendation NextStepCard) ·
-  `/learn` roadmap (only `LIVE_CONCEPT="C3"` live) · `/practice` editor + results ·
-  `/progress` C3 card (stage words + `mastery_claim ? Strong : Not yet`) ·
-  `/history` intentional empty state (“no history endpoint yet — Step 20B”).
+- **Routes (5):** `/` Home (“what next”: ContinueCard + backend-`next_action` NextStepCard with
+  journey fallback + “Where you stand” + “Recent activity”, enrichment best-effort) ·
+  `/learn` roadmap (all 8 concepts from `GET /student/concepts`, grouped by backend `group`) ·
+  `/practice` editor + results (unchanged Step 20A flow) ·
+  `/progress` per-concept cards (level/trend/attempts/transfer/hints + `next_action`) ·
+  `/history` real attempt list from `GET /student/history` (honest empty state when none).
 - **Session** (`components/session.tsx`): throwaway per-browser id in
   `localStorage["cognify.session_id"]`; `boot()` creates or resumes (`getJourney` + problem enrich;
   404 ⇒ fresh “session expired”); `refresh/restart/startFresh`. Explicitly NOT auth.
@@ -1377,13 +1386,13 @@ Vitest + jsdom + Testing Library for tests, empty `next.config.ts`.
 
 | Area | State |
 |---|---|
-| History page | `[PLANNED / NOT IMPLEMENTED]` — empty state only; no backend endpoint (Step 20B). |
-| Learn/Progress for C1–C2, C4–C8 | `[PARTIALLY IMPLEMENTED]` — filtered to “coming / Not started yet”; only C3 live. |
+| History page | `[IMPLEMENTED]` — real attempt list from `GET /student/history`; honest empty state when no attempts. |
+| Learn/Progress for C1–C2, C4–C8 | `[IMPLEMENTED]` (read views) — all 8 concepts served by `GET /student/concepts`; zero-attempt concepts honestly report “Not started yet”. Practice remains C3-scoped. |
 | Java track UI | `[PLANNED / NOT IMPLEMENTED]` — header hardcodes “current language: Python”. |
 | Auth / accounts / roles | `[PLANNED / NOT IMPLEMENTED]` — sessions are throwaway browser tokens. |
 
-> **Remember this:** *“The frontend is a faithful messenger: four endpoints, no opinions, honest
-> placeholders where the backend isn’t ready.”*
+> **Remember this:** *“The frontend is a faithful messenger: seven read/submit endpoints, no
+> opinions, honest empty states where no learning has happened yet.”*
 
 ---
 
@@ -1398,7 +1407,7 @@ Only implemented measures are listed (each with WHAT/WHY/HOW). Anything else is 
 | 3 | Network disabled `[IMPLEMENTED]` | No egress from student/helper containers. | Block exfiltration, C2, package installs, oracle attacks. | `--network none` (helper hardcoded; student default `none`); tests assert flags, forbid `-e/--env`. |
 | 4 | Resource limits `[IMPLEMENTED]` | Memory 256m (+swap), CPU 1.0, PIDs 128, per-test timeout 1–30 s (slice 5 s). | Stop fork-bombs, miners, infinite loops from starving the host. | `sandbox` constants + `build_command`; `models` timeout bounds; timeout→kill→`TIMEOUT` result. |
 | 5 | Code size limits `[IMPLEMENTED]` | ≤100k chars (both services), 1–50 tests/request. | Bound payload/Docker-stdin abuse. | `student.MAX_CODE_CHARS`, `models.MAX_CODE_CHARS/MAX_TESTS_PER_REQUEST`; 422 on violation. |
-| 6 | Hidden-test redaction `[IMPLEMENTED]` | Hidden expected/actual/inputs never leave the server. | Prevent answer harvesting via UI/devtools. | `problem_view` allowlist; `to_student_view` (`expected_output→None`, `hidden_redacted`); 2000-char truncation; UI “details stay hidden”. |
+| 6 | Hidden-test redaction `[IMPLEMENTED]` | Hidden expected/actual/inputs never leave the server. | Prevent answer harvesting via UI/devtools. | `problem_view` allowlist; `to_student_view` (`expected_output→None`, `hidden_redacted`); 2000-char truncation; UI “details stay hidden”. Step 20B extends the same philosophy: concept views omit mastery floats + misconception IDs + iso groups + evidence refs; history omits outputs/IDs/groups/refs; the catalog omits tests/MID bindings/iso/solutions and scrubs MID mentions from bank descriptions (`_safe_description`). |
 | 7 | Server-side problem resolution `[IMPLEMENTED]` | Tests/concept/language/group resolved from `problem_id` server-side. | Client must not pick its own grading truth. | `_resolve_problem` + bank loader; request models drop unknown fields. |
 | 8 | Spoofing protection `[IMPLEMENTED]` | Client concept/language/mastery/diagnosis/verification ignored. | Stop crafted “I already mastered this” payloads. | `extra="ignore"` + resolution-only flow; spoof test (`C8/java/1.0` still `FAILED+C3-M01`). |
 | 9 | Timeout + cleanup `[IMPLEMENTED]` | Wall-clock kill + container/volume removal (best-effort, 10 s caps). | No orphan containers/volumes filling the daemon. | `subprocess.run(timeout=…)` → `_kill_container` → `finally _remove_volume`; `--rm` everywhere. |
@@ -1772,9 +1781,10 @@ lands back in the UI. State lives only in `LM`; reasoning only in `DG`; executio
 **W5.7 — How would you handle authentication?**
 - Testing: security roadmap honesty.
 - Good answer: “Today: none (throwaway sessions). Plan: issue-based auth (e.g. JWT via gateway),
-  bind `users.id` to real identities, scope every query by user, expire/revoke sessions, then add
-  per-concept/history endpoints (Step 20B) behind auth. `JWT_SECRET` env is scaffold only.”
-- Key points: sessions ≠ accounts; history endpoints must wait for auth.
+  bind `users.id` to real identities, scope every query by user, expire/revoke sessions, then put
+  the read-only per-concept/history/problem endpoints (Step 20B, currently session-scoped) behind
+  auth. `JWT_SECRET` env is scaffold only.”
+- Key points: sessions ≠ accounts; the 20B read views must move behind auth next.
 - Wrong answer: “We have JWT auth.”
 
 **W5.8 — How would you isolate users?**
@@ -1797,9 +1807,9 @@ lands back in the UI. State lives only in `LM`; reasoning only in `DG`; executio
 **W5.10 — How would you support instructors?**
 - Testing: product thinking without fabrication.
 - Good answer: “No dashboard exists. Candidate read-only views over existing tables: class mastery
-  heatmap (concept states), recurring-misconception leaderboard (flags+counters), evidence drill-down
-  (`explain_mastery`), transfer success rates. All data already logged; needs auth + aggregation
-  endpoints (Step-20B-shaped work).”
+   heatmap (concept states), recurring-misconception leaderboard (flags+counters), evidence drill-down
+   (`explain_mastery`), transfer success rates. All data already logged; needs auth + aggregation
+   endpoints (extending the Step-20B read-view pattern).”
 - Key points: propose, don’t claim.
 - Wrong answer: “Use the progress page.”
 
@@ -1935,9 +1945,10 @@ lands back in the UI. State lives only in `LM`; reasoning only in `DG`; executio
 
 **W7.10 — What are the current limitations of Cognify?**
 - Testing: honesty under pressure (the most important answer).
-- Good answer: deliver §AC from memory: C3-deep demo (rules/UI), no history endpoints (20B), throwaway
-  in-memory sessions, deterministic-mode LLM default, Java execution without track/UI/bank, no
-  auth/dashboard/eval, no dedup, Docker-required, difficulty 1–3, hint plumbing without hint UI.
+- Good answer: deliver §AC from memory: C3-deep demo (rules/UI), read-only per-concept/history/
+  catalog views (20B) over throwaway in-memory sessions, deterministic-mode LLM default, Java
+  execution without track/UI/bank, no auth/dashboard/eval, no dedup, Docker-required,
+  difficulty 1–3, hint plumbing without hint UI.
   End with: “The loop is real but narrow — our roadmap widens it without changing its shape.”
 - Key points: never inflate; frame limits as scoped next steps (§AD).
 - Wrong answer: hand-waving or claiming roadmap items as done.
@@ -2237,13 +2248,13 @@ Evidence/file column lets a reviewer verify each row in under a minute.
 | Adaptive engine R1–R8 + ranking | `[IMPLEMENTED]` | `packages/adaptive/*.py` + tests | Thresholds/gates §N. |
 | Verification (4 outcomes, decision table) | `[IMPLEMENTED]` | `packages/verification/*.py` + tests | PASS+PASS ⇒ verified; mastery disclaimed. |
 | Closed loop orchestration | `[IMPLEMENTED]` | `closed_loop.py` + `test_closed_loop.py` | 2/2/1/0 mapping; non-idempotent (no dedup). |
-| Student API (4 endpoints + health) | `[IMPLEMENTED]` | `student.py`, `main.py`, flow tests | Spoof/hidden/CORS/503/502/409 handling. |
+| Student API (7 endpoints + health) | `[IMPLEMENTED]` | `student.py`, `main.py`, flow + read tests | Spoof/hidden/CORS/503/502/409 handling; 20B views add MID/iso/mastery-float redaction. |
 | AI/Exec APIs + health | `[IMPLEMENTED]` | `ai-service/app/main.py`, `execution-service/app/main.py` | 2 + 3 endpoints. |
-| Frontend (Home/Learn/Practice/Progress/History) | `[PARTIALLY IMPLEMENTED]` | `apps/web/src/**` + vitest | C3-live; history empty-state; no auth. |
+| Frontend (Home/Learn/Practice/Progress/History) | `[IMPLEMENTED]` (C3-live; read views live) | `apps/web/src/**` + vitest (40 tests) | Live concept/history data; Practice C3-scoped; no auth. |
 | Python track end-to-end | `[IMPLEMENTED]` | smoke + journey tests (`VERIFIED_IMPROVED` golden path) | C3 slice proven. |
 | Authentication / users / JWT enforcement | `[PLANNED / NOT IMPLEMENTED]` | `JWT_*` env scaffold only; session.tsx disclaimer | Anyone can create sessions. |
 | Persistent database (Postgres/migrations) | `[PLANNED / NOT IMPLEMENTED]` | `DATABASE_URL` placeholder (asyncpg URL vs sync engine mismatch noted) | No migrations; file-SQLite default unused by slice. |
-| Per-concept / history endpoints (Step 20B) | `[PLANNED / NOT IMPLEMENTED]` | README + history page note | Not started. |
+| Per-concept / history / catalog read views (Step 20B) | `[IMPLEMENTED]` | `student.py` read-only `GET`s + `test_student_read.py` (21 tests) | Concepts/history/problems served; no writes. |
 | Instructor dashboard | `[PLANNED / NOT IMPLEMENTED]` | Nothing in repo | Data exists; UI doesn’t. |
 | Evaluation / benchmarking (learning gains) | `[PLANNED / NOT IMPLEMENTED]` | No study/suite in repo | Mechanism exists; efficacy unmeasured. |
 | Stronger isolation (gVisor/Firecracker/K8s) | `[PLANNED / NOT IMPLEMENTED]` | Nothing in repo | Docker flags are the boundary. |
@@ -2253,33 +2264,32 @@ Evidence/file column lets a reviewer verify each row in under a minute.
 
 ## AD — Future steps (separate from current architecture)
 
-> Only steps grounded in the repository/project state (README Step-20B note, empty dirs, scaffold
+> Only steps grounded in the repository/project state (empty dirs, scaffold
 > envs, honest gaps found above). All marked NOT IMPLEMENTED YET where applicable.
 
 ### CURRENT (done — do not re-plan)
 
-Steps 0–20A: taxonomy → problem schema → execution → evidence → LLM config → learner tables →
+Steps 0–20B: taxonomy → problem schema → execution → evidence → LLM config → learner tables →
 adaptive → verification → closed loop → bank loader/pipeline → transfer design → journey → C3
 diagnosis rules → student slice → smoke hardening → learner-intelligence upgrade → C1–C8 bank
 expansion (24) → 20A product foundation (Home/Learn/Practice/Progress/History on existing APIs) +
-Docker sandbox architecture fix. The C3 loop is fully green in tests.
+Docker sandbox architecture fix → 20B read-only student data APIs (`GET /student/concepts`,
+`GET /student/history`, `GET /student/problems`) lighting up Learn/Progress/History/Home with
+real learner state (no algorithm changes). The C3 loop is fully green in tests.
 
 ### NEXT (known planned work — NOT IMPLEMENTED YET)
 
-1. **Step 20B — backend per-concept/history endpoints** (NOT IMPLEMENTED YET): read-only
-   concept-state + attempt-history APIs behind the future auth boundary; lights up the history page
-   and Learn/Progress for all concepts.
-2. **Durable persistence** (NOT IMPLEMENTED YET): shared engine via `DATABASE_URL` (fix asyncpg→sync
+1. **Durable persistence** (NOT IMPLEMENTED YET): shared engine via `DATABASE_URL` (fix asyncpg→sync
    driver), migration tooling, session table replacing per-session `:memory:` DBs.
-3. **Java track surfacing** (NOT IMPLEMENTED YET): `problem-bank/java/`, track-aware resolution + UI
+2. **Java track surfacing** (NOT IMPLEMENTED YET): `problem-bank/java/`, track-aware resolution + UI
    switcher, Java diagnosis rules; fix `java_runner` double-compile first.
-4. **AuthN/AuthZ** (NOT IMPLEMENTED YET): real identities bound to `users`, scoped queries, session
-   expiry/revocation (`JWT_*` currently scaffold).
-5. **Submission dedup / idempotency keys** (NOT IMPLEMENTED YET): stop append-on-retry for identical
+3. **AuthN/AuthZ** (NOT IMPLEMENTED YET): real identities bound to `users`, scoped queries, session
+   expiry/revocation (`JWT_*` currently scaffold); move the Step-20B read views behind auth.
+4. **Submission dedup / idempotency keys** (NOT IMPLEMENTED YET): stop append-on-retry for identical
    resubmits and closed-loop re-runs.
-6. **Hint system end-to-end** (NOT IMPLEMENTED YET): hint endpoint + UI wired to the already-plumbed
+5. **Hint system end-to-end** (NOT IMPLEMENTED YET): hint endpoint + UI wired to the already-plumbed
    `hint_used`/`hint_count` path (formula + R8 already honor it).
-7. **Evaluation suite** (NOT IMPLEMENTED YET): per-MID diagnosis→transfer precision, recurrence
+6. **Evaluation suite** (NOT IMPLEMENTED YET): per-MID diagnosis→transfer precision, recurrence
    clearance rates, mastery trajectories, transfer difficulty parity analysis.
 
 ### FUTURE PRODUCTIZATION (directional — NOT IMPLEMENTED YET)
@@ -2297,7 +2307,7 @@ execute → evidence → diagnose → intervene → retry → transfer → verif
 Completed 2026-09-20 against the live repo (no app files modified; `git status` untouched by design):
 
 1. ✅ Every major component covered (frontend, 3 services, 7 packages, bank, taxonomy).
-2. ✅ Every implemented backend endpoint covered (§F: 4 + 2 + 3 + healths; planned separated).
+2. ✅ Every implemented backend endpoint covered (§F: 7 + 2 + 3 + healths; planned separated).
 3. ✅ Learner model explained (§K: tables, views, writers, events, track isolation).
 4. ✅ Mastery formula from actual code (§L: constants/bands/severity/momentum verbatim + example).
 5. ✅ Adaptive rules from actual code (§N: R1–R8 order, thresholds, priorities, gates).

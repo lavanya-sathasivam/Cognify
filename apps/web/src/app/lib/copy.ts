@@ -24,6 +24,13 @@ const LEVEL_LABELS: Record<string, string> = {
   unknown: "Not started yet",
 };
 
+const TREND_LABELS: Record<string, string> = {
+  unknown: "No trend yet",
+  stable: "Steady",
+  improving: "Improving",
+  declining: "Needs attention",
+};
+
 const STAGE_COPY: Record<string, { title: string; detail: string }> = {
   started: {
     title: "Start your first problem",
@@ -102,6 +109,36 @@ export function isDebugMode(): boolean {
   } catch {
     return false;
   }
+}
+
+/** Human label for a backend mastery trend. Never shows raw values. */
+export function trendLabel(trend: string | null | undefined): string {
+  if (!trend) return TREND_LABELS.unknown;
+  return TREND_LABELS[trend] ?? TREND_LABELS.unknown;
+}
+
+/** Human sentence for hint reliance (Step 20B progress view). */
+export function hintRelianceCopy(hintDependence: number, hintCount: number): string {
+  if (!hintCount || hintDependence <= 0) return "Working independently, no hints used.";
+  if (hintDependence >= 0.5)
+    return "Relying on hints — try the next problem without one.";
+  return "Mostly independent, with an occasional hint.";
+}
+
+/** Human sentence for transfer performance (Step 20B progress view). */
+export function transferCopy(attempts: number, successes: number): string {
+  if (!attempts) return "No transfer attempts yet — solve the original first.";
+  if (successes >= attempts)
+    return `Transfer solid: ${successes} of ${attempts} correct in new contexts.`;
+  return `Transfer in progress: ${successes} of ${attempts} correct in new contexts.`;
+}
+
+/** Human result words for one history entry (never raw codes). */
+export function outcomeLabel(outcome: string, verified: boolean): string {
+  if (outcome === "passed") {
+    return verified ? "Solved — improvement verified" : "Solved";
+  }
+  return "Needs another attempt";
 }
 
 /** Test helper: does this string contain anything a student must not see? */

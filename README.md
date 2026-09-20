@@ -2,13 +2,14 @@
 
 **COGNIFY** is an AI-powered adaptive programming learning system that understands **WHY** a student struggles with programming concepts, provides targeted interventions based on the student's diagnosed weaknesses and learning history, and verifies whether the student actually improved.
 
-> Current state: implementation through Step 20A is complete, including the
+> Current state: implementation through Step 20B is complete, including the
 > Docker execution architecture fix (`ccfc49d fix execution service sandbox
 > architecture`), the learner-intelligence upgrade, the C1–C8 Python
-> problem-bank expansion (24 problems), and the student-facing product
-> foundation (Home/Learn/Practice/Progress/History on existing APIs,
-> working tree clean). Step 20B (backend per-concept/history endpoints)
-> has NOT been started.
+> problem-bank expansion (24 problems), the student-facing product
+> foundation (Home/Learn/Practice/Progress/History), and the read-only
+> student data APIs behind Learn/Progress/History/Home
+> (`GET /student/concepts`, `GET /student/history`, `GET /student/problems`,
+> working tree clean).
 > The full learning loop works for the Python C3 slice
 > (execution → Evidence Pack → diagnosis → learner model → intervention →
 > retry → transfer → verification → adaptive recommendation) with a
@@ -530,21 +531,23 @@ only; everything else uses the LLM (if configured) or the safe fallback.
 
 ## 18. Testing and validation
 
-Last verified results (implementation through Step 20A):
+Last verified results (implementation through Step 20B):
 
-- Core backend: **170 passed**
+- Core backend: **191 passed** (incl. 21 new Step 20B read-API tests)
 - Execution service: **39 passed**
 - Packages: **284 passed, 27 subtests passed** (incl. 20 new Step 19 bank tests)
-- Frontend: **33 Vitest tests passed** (7 preserved Practice tests + 26 new:
-  copy layer, Home/nav, Learn/Progress/History, humanized Practice feedback)
+- Frontend: **40 Vitest tests passed** (7 preserved Practice tests +
+  humanized Practice feedback, copy layer, Home/nav, live-data
+  Learn/Progress/History incl. loading/error/empty states)
 - TypeScript: `npx tsc --noEmit` **passed**
 - ESLint: `npm run lint` **passed**
 - Next.js production build: `npm run build` **passed** (routes `/`,
   `/learn`, `/practice`, `/progress`, `/history`)
-- Live API-level C3 journey re-verified in Step 20A against Docker
+- Live API-level C3 journey re-verified in Step 20B against Docker
   execution (wrong → `FAILED`/diagnosis/intervention → retry `PASSED` →
-  transfer `VERIFIED_IMPROVED` → `transfer_done`); browser click-through
-  was not performed in this step.
+  transfer `VERIFIED_IMPROVED` → `transfer_done`, with matching
+  per-concept card, history entries, and verified transfer flag);
+  browser click-through was not performed in this step.
 
 Run suites from the repo root (venv activated):
 
@@ -608,7 +611,7 @@ This prototype intentionally does **not** include:
 
 ## 20. Current implementation status
 
-Completed milestones (Steps 1–20A):
+Completed milestones (Steps 1–20B):
 
 1. Project architecture and repository structure
 2. Concept taxonomy (C1–C8)
@@ -633,8 +636,12 @@ Completed milestones (Steps 1–20A):
 19. Problem-bank expansion to C1–C8 in Python (24 problems: canonical +
     remedial + transfer per concept)
 20A. Student product foundation (Home/Learn/Practice/Progress/History,
-    shared session, humanized copy, `?debug=1` developer view — existing
-    backend APIs only; 20B endpoints not started)
+     shared session, humanized copy, `?debug=1` developer view — existing
+     backend APIs only)
+20B. Student data APIs + real learner views (read-only
+     `GET /student/concepts`, `GET /student/history`,
+     `GET /student/problems`; Learn/Progress/History/Home render live
+     learner state; no algorithm changes; no auth/database)
 
 ### IMPLEMENTED / VERIFIED
 
@@ -651,15 +658,21 @@ Completed milestones (Steps 1–20A):
 - Deterministic adaptive recommendations (6 action types) and verification
   verdicts (4 outcomes).
 - Student API (`/student/sessions`, `/student/problems/{id}`,
-  `/student/submissions`, `/student/journey`) with CORS allowlist, code
-  size limits, hidden-output redaction, and spoofed-metadata rejection.
+  `/student/submissions`, `/student/journey`, plus read-only
+  `/student/concepts`, `/student/history`, `/student/problems`) with CORS
+  allowlist, code size limits, hidden-output redaction, misconception-ID
+  and isomorphic-grouping redaction on the new views, and
+  spoofed-metadata rejection.
 - Student-facing Next.js UI with Vitest coverage, clean `tsc`, `lint`, and
   production `build`: five areas (Home, Learn, Practice, Progress,
   History) sharing one browser session; Practice is the redesigned C3
   coding flow (two-column, per-test results, humanized feedback, `?debug=1`
-  developer view); internal codes never appear in normal UI; Learn shows
-  the eight real concepts with honest not-started states; History is an
-  honest empty state pending backend history support (Step 20B).
+   developer view); internal codes never appear in normal UI; Learn shows
+   the eight real concepts with live per-concept state and honest
+   not-started states; Progress shows levels, trends, transfer, and hint
+   reliance with the adaptive next action; History lists real attempts
+   with human feedback and verified-improvement flags (honest empty
+   state when there are none).
 
 ### PARTIALLY IMPLEMENTED
 
@@ -685,7 +698,7 @@ Completed milestones (Steps 1–20A):
 - Production deployment / cloud infrastructure.
 - LLM evaluation benchmarks.
 - Stronger isolation such as gVisor/Firecracker.
-- Step 20B (per-concept/history backend endpoints) and beyond.
+- Steps beyond 20B (see handbook roadmap).
 
 ## 21. Local development / Docker run instructions
 

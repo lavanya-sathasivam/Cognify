@@ -4,10 +4,14 @@ Endpoints:
   GET  /health              — liveness check.
   POST /student/sessions    — start a student session (canonical problem).
   GET  /student/problems/{} — safe problem metadata (no hidden answers).
-  POST /student/submissions — submit code: execution -> evidence ->
-                               diagnosis -> learner update -> intervention,
-                               retry unlock, transfer, verification.
-  GET  /student/journey      — journey stage, verification, recommendations.
+   POST /student/submissions — submit code: execution -> evidence ->
+                                diagnosis -> learner update -> intervention,
+                                retry unlock, transfer, verification.
+   GET  /student/journey      — journey stage, verification, recommendations.
+   GET  /student/concepts     — read-only per-concept state + adaptive next
+                                action (Step 20B).
+   GET  /student/history      — read-only student-safe attempt history (20B).
+   GET  /student/problems     — read-only safe problem catalog (Step 20B).
 
 ``create_app`` accepts an optional runner factory (Docker-backed by
 default; scripted fakes in tests) so student code is never executed on
