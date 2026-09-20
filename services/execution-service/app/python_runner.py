@@ -6,6 +6,7 @@ configured container image. Nothing executes on the host: see ``sandbox.py``.
 """
 from __future__ import annotations
 
+
 from .runners import BaseRunner
 from .sandbox import RunResult, SandboxRunner
 
@@ -25,7 +26,9 @@ class PythonRunner(BaseRunner):
     ) -> None:
         from .sandbox import DockerSandboxRunner
 
-        super().__init__(sandbox or DockerSandboxRunner(image=image))
+        super().__init__(
+            sandbox or DockerSandboxRunner(image=image)
+        )
 
     def run_single(
         self, code: str, stdin_data: str, timeout_seconds: float

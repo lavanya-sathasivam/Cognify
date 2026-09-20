@@ -371,35 +371,112 @@ class DockerSandboxTests(unittest.TestCase):
 
     def test_run_uses_docker_and_returns_output(self):
         completed = subprocess.CompletedProcess(
-            args=["docker"], returncode=0, stdout=b"3\n", stderr=b""
+            args=["docker"],
+            returncode=0,
+            stdout=b"3\n",
+            stderr=b"",
         )
-        with patch("app.sandbox.docker_available", return_value=True), patch(
-            "app.sandbox.subprocess.run", return_value=completed
+
+        with patch(
+            "app.sandbox.docker_available",
+            return_value=True,
+        ), patch(
+            "app.sandbox.subprocess.run",
+            side_effect=[
+                completed,  # workspace helper
+                completed,  # student container
+                completed,  # volume cleanup
+            ],
         ) as mock_run:
-            runner = DockerSandboxRunner(image="python:3.11-slim")
-            result = runner.run({"solution.py": "x"}, ["python", "/workspace/solution.py"], "1", 5.0)
-        self.assertEqual((result.stdout, result.exit_code, result.timed_out), ("3\n", 0, False))
-        argv = mock_run.call_args[0][0]
-        self.assertEqual(argv[0], "docker")
-        self.assertNotIn("shell", mock_run.call_args[1])
-        self.assertEqual(mock_run.call_args[1]["timeout"], 5.0)
-        self.assertEqual(mock_run.call_args[1]["input"], b"1")
+            runner = DockerSandboxRunner(
+                image="python:3.11-slim"
+            )
 
+            result = runner.run(
+                {"solution.py": "x"},
+                ["python", "/workspace/solution.py"],
+                "1",
+                5.0,
+            )
+
+        self.assertEqual(
+            (
+                result.stdout,
+                result.exit_code,
+                result.timed_out,
+            ),
+            ("3\n", 0, False),
+        )
+
+        self.assertEqual(mock_run.call_count, 3)
+
+        helper_argv = mock_run.call_args_list[0].args[0]
+        student_argv = mock_run.call_args_list[1].args[0]
+        cleanup_argv = mock_run.call_args_list[2].args[0]
+
+        self.assertEqual(helper_argv[0], "docker")
+        self.assertEqual(student_argv[0], "docker")
+        self.assertEqual(
+            cleanup_argv[:3],
+            ["docker", "volume", "rm"],
+        )
+
+        self.assertNotIn(
+            "shell",
+            mock_run.call_args_list[1].kwargs,
+        )
+
+        self.assertEqual(
+            mock_run.call_args_list[1].kwargs["timeout"],
+            5.0,
+        )
+
+        self.assertEqual(
+            mock_run.call_args_list[1].kwargs["input"],
+            b"1",
+        )
     def test_timeout_maps_and_kills_container(self):
-        def _raise(*args, **kwargs):
-            raise subprocess.TimeoutExpired(cmd=args[0], timeout=5.0, output=b"part")
+        completed = subprocess.CompletedProcess(
+            args=["docker"],
+            returncode=0,
+            stdout=b"",
+            stderr=b"",
+        )
 
-        with patch("app.sandbox.docker_available", return_value=True), patch(
-            "app.sandbox.subprocess.run", side_effect=_raise
+        timeout_error = subprocess.TimeoutExpired(
+            cmd=["docker", "run"],
+            timeout=5.0,
+            output=b"part",
+        )
+
+        with patch(
+            "app.sandbox.docker_available",
+            return_value=True,
+        ), patch(
+            "app.sandbox.subprocess.run",
+            side_effect=[
+                completed,       # workspace helper
+                timeout_error,  # student container
+                completed,       # volume cleanup
+            ],
         ) as mock_run, patch.object(
-            DockerSandboxRunner, "_kill_container", return_value=None
+            DockerSandboxRunner,
+            "_kill_container",
+            return_value=None,
         ) as mock_kill:
-            result = DockerSandboxRunner(image="img").run({"f": "x"}, ["cmd"], "", 5.0)
+            result = DockerSandboxRunner(
+                image="img"
+            ).run(
+                {"f": "x"},
+                ["cmd"],
+                "",
+                5.0,
+            )
+
         self.assertTrue(result.timed_out)
         self.assertIn("TIMEOUT", result.stderr)
         mock_kill.assert_called_once()
-        self.assertEqual(mock_run.call_count, 1)  # only the run, kill was mocked
-
+        self.assertEqual(mock_run.call_count, 3)
     def test_fail_closed_without_docker(self):
         with patch("app.sandbox.docker_available", return_value=False):
             with self.assertRaises(SandboxUnavailableError):

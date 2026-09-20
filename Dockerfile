@@ -2,22 +2,34 @@ FROM python:3.11-slim
 WORKDIR /code
 
 # Single shared image for all Cognify Python services.
-# Set via compose build args:
-#   SERVICE_NAME = core-backend | ai-service | execution-service
-#   SERVICE_PORT = 8000 | 8001 | 8002
 ARG SERVICE_NAME=core-backend
 ARG SERVICE_PORT=8000
 
 ENV PORT=${SERVICE_PORT} \
     PYTHONUNBUFFERED=1
 
+# Docker CLI is required by execution-service because the
+# sandbox runner launches isolated containers through `docker run`.
+RUN if [ "$SERVICE_NAME" = "execution-service" ]; then \
+      apt-get update && \
+      apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        gnupg; \
+      install -m 0755 -d /etc/apt/keyrings; \
+      curl -fsSL https://download.docker.com/linux/debian/gpg \
+        -o /etc/apt/keyrings/docker.asc; \
+      chmod a+r /etc/apt/keyrings/docker.asc; \
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian trixie stable" \
+        > /etc/apt/sources.list.d/docker.list; \
+      apt-get update; \
+      apt-get install -y --no-install-recommends docker-ce-cli; \
+      rm -rf /var/lib/apt/lists/*; \
+    fi
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY services/${SERVICE_NAME}/app ./app
-# Runtime shared files: the problem bank (bank JSON), all service app dirs
-# (core-backend alias-loads ai-service/execution-service modules in-process
-# for the student slice), and shared packages (taxonomy / problem-schema).
 COPY services ./services
 COPY packages ./packages
 COPY problem-bank ./problem-bank

@@ -16,8 +16,11 @@ JAVA_IMAGE: str = "eclipse-temurin:17-jdk"
 SOURCE_FILENAME: str = "Main.java"
 CLASS_NAME: str = "Main"
 COMPILE_COMMAND: list[str] = ["javac", f"/workspace/{SOURCE_FILENAME}"]
-RUN_COMMAND: list[str] = ["java", "-cp", "/workspace", CLASS_NAME]
-
+RUN_COMMAND: list[str] = [
+    "sh",
+    "-c",
+    "javac /workspace/Main.java && java -cp /workspace Main",
+]
 
 class JavaRunner(BaseRunner):
     """Compile-then-run Java submissions."""
@@ -30,7 +33,9 @@ class JavaRunner(BaseRunner):
     ) -> None:
         from .sandbox import DockerSandboxRunner
 
-        super().__init__(sandbox or DockerSandboxRunner(image=image))
+        super().__init__(
+            sandbox or DockerSandboxRunner(image=image)
+        )
 
     def compile(self, code: str, timeout_seconds: float) -> str | None:
         outcome = self.sandbox.run(

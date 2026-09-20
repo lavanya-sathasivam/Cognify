@@ -87,7 +87,7 @@ from packages.verification import (
     verify_improvement,
 )
 
-from . import learner_engine, repositories
+from . import execution_client, learner_engine, repositories
 from .closed_loop import ClosedLoopContext, run_closed_loop
 from .db import get_session_factory, init_db
 
@@ -184,13 +184,23 @@ def _ai_interventions_module() -> Any:
 
 
 def _default_runner_factory(language: str, timeout_seconds: float) -> Any:
-    """Production runners: existing Docker-backed runners (fail closed)."""
+    """Production factory sentinel (HTTP execution; never Docker).
+
+    Production submissions execute via execution-service over HTTP
+    (see ``execution_client.execute_problem``). This factory is retained
+    for backwards compatibility and for ``_execute`` dispatch, but it
+    never creates a local Docker runner. Direct invocation fails closed
+    so core-backend can never accidentally instantiate
+    ``DockerSandboxRunner`` (core-backend has no Docker access).
+    """
     if language != LANGUAGE_TRACK:
         raise ValueError(
             f"Unsupported language {language!r} in this slice (python only)."
         )
-    mods = pipe.execution_modules()
-    return mods["python_runner"].PythonRunner()
+    raise RuntimeError(
+        "Local execution is disabled in core-backend; submissions execute "
+        "via execution-service over HTTP (execution_client.execute_problem)."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -460,14 +470,42 @@ def _resolve_problem(problem_id: str, record: _StudentSession) -> tuple[Problem,
 
 
 def _execute(
-    problem: Problem, code: str, runner_factory: RunnerFactory) -> Any:
+    problem: Problem, code: str, runner_factory: RunnerFactory | None) -> Any:
     if not isinstance(code, str) or not code.strip():
         raise HTTPException(status_code=422, detail="code must be a non-empty string.")
     if len(code) > MAX_CODE_CHARS:
         raise HTTPException(
             status_code=422, detail=f"code exceeds {MAX_CODE_CHARS} characters."
         )
+    # Production path: default factory (or None) executes via
+    # execution-service over HTTP. core-backend never instantiates a
+    # local Docker runner here.
+    if runner_factory is None or runner_factory is _default_runner_factory:
+        if problem.language != LANGUAGE_TRACK:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Unsupported language {problem.language!r} "
+                    "in this slice (python only)."
+                ),
+            )
+        try:
+            return execution_client.execute_problem(
+                problem, code, timeout_seconds=TIMEOUT_SECONDS
+            )
+        except execution_client.ExecutionServiceUnavailable as exc:
+            raise HTTPException(
+                status_code=503, detail="Execution backend unavailable."
+            ) from exc
+        except execution_client.ExecutionServiceBadResponse as exc:
+            raise HTTPException(
+                status_code=502,
+                detail="Execution backend returned an invalid response.",
+            ) from exc
+    # Injected/test path: existing local runner via the pipeline
+    # (FakeSandboxRunner / MarkerRunner in tests).
     try:
+        assert runner_factory is not None
         runner = runner_factory(problem.language, TIMEOUT_SECONDS)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
