@@ -1,0 +1,51 @@
+{
+  "problem_id": "PY-C3-COUNT-DIV",
+  "concept_id": "C3",
+  "language": "python",
+  "difficulty": 2,
+  "title": "Count Divisible Numbers",
+  "description": "Read two integers n and k, then read a list of n integers. Count how many numbers in the list are divisible by k, using a loop and an accumulator. A number x is divisible by k when x % k == 0. This problem tests loop bounds and iteration control (C3): the loop must visit every element exactly once and the running count must start at zero.",
+  "constraints": [
+    "1 <= n <= 1000",
+    "1 <= k <= 1000",
+    "Each of the n list values satisfies -1000000000 <= value <= 1000000000"
+  ],
+  "starter_code": "def count_divisible(nums, k):\n    \"\"\"Return how many numbers in nums are divisible by k.\"\"\"\n    # TODO: implement using a loop and an accumulator\n    raise NotImplementedError\n\n\ndef main():\n    import sys\n    data = sys.stdin.read().strip().split()\n    if not data:\n        return\n    n = int(data[0])\n    k = int(data[1])\n    nums = list(map(int, data[2:2 + n]))\n    print(count_divisible(nums, k))\n\n\nif __name__ == \"__main__\":\n    main()\n",
+  "input_format": "First line: two integers n and k separated by a space. Second line: n integers separated by spaces.",
+  "output_format": "A single integer: how many of the n numbers are divisible by k.",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "5 2\n1 2 3 4 5\n",
+      "expected_output": "2"
+    },
+    {
+      "id": "P2",
+      "input": "4 3\n3 6 7 9\n",
+      "expected_output": "3"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "1 5\n3\n",
+      "expected_output": "0"
+    },
+    {
+      "id": "H2",
+      "input": "6 2\n2 4 6 8 10 12\n",
+      "expected_output": "6"
+    },
+    {
+      "id": "H3",
+      "input": "3 1\n7 8 9\n",
+      "expected_output": "3"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C3-COUNT-DIV",
+  "variant_role": "canonical",
+  "misconception_ids": [
+    "C3-M01",
+    "C3-M04"
+  ]
+}
