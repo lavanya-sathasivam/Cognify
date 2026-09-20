@@ -1,15 +1,25 @@
-"""COGNIFY ai-service — diagnosis orchestrator (Step 7).
+"""COGNIFY ai-service — diagnosis orchestrator (Steps 7 + 15).
 
 ``diagnose_pack`` is the single entry point for AI diagnosis:
 
-1. Build the LLM prompt from the EvidencePack ONLY (no DB access —
-   the signature accepts just ``pack`` + ``client``).
-2. Ask the LLM (if configured) for one strict JSON object.
-3. Parse + strictly validate the complete response (reject hallucinated
+1. Try the deterministic Step 15 evidence rules on the EvidencePack
+   FIRST (pure, no LLM, no database). A rule fires only when several
+   independent evidence signals corroborate one candidate misconception;
+   the hit is re-validated with the strict validator + gate.
+2. Otherwise build the LLM prompt from the EvidencePack ONLY (no DB
+   access — the signature accepts just ``pack`` + ``client``).
+3. Ask the LLM (if configured) for one strict JSON object.
+4. Parse + strictly validate the complete response (reject hallucinated
    IDs, wrong concept, bad confidence, ungrounded refs).
-4. Apply the confidence/grounding gate.
-5. On ANY failure (unavailable, malformed, invalid, gated) return the
-   deterministic fallback classifier.
+5. Apply the confidence/grounding gate.
+6. On ANY failure (no rule hit; LLM unavailable, malformed, invalid,
+   gated) return the deterministic fallback classifier.
+
+Rule diagnoses are deterministic non-LLM output, so they are reported
+with ``source="fallback"`` (the existing Step 7 contract keeps exactly
+two sources: ``"llm"`` vs deterministic). A rule hit is observable via
+its ``"Rule <RULE_ID>:"`` explanation prefix and higher confidence; the
+generic fallback never carries a rule prefix.
 
 The service never updates a database, never calculates mastery, never
 generates hints, and never makes adaptive/roadmap decisions. It returns
@@ -27,6 +37,7 @@ from .gate import MIN_ACCEPT_CONFIDENCE, confidence_grounding_gate
 from .llm_client import BaseLLMClient
 from .models import Diagnosis, DiagnosisResult
 from .prompt import build_diagnosis_prompt
+from .rules import try_rule_diagnosis
 from .validator import DiagnosisValidationError, validate_llm_diagnosis
 
 
@@ -64,8 +75,20 @@ def diagnose_pack(
 
     Returns:
         DiagnosisResult with ``source`` set to ``"llm"`` or ``"fallback"``.
+        Deterministic Step 15 rule hits are reported as ``"fallback"``
+        (non-LLM output); see the module docstring.
     """
     evidence = pack if isinstance(pack, EvidencePack) else EvidencePack.from_dict(pack)
+    rule_hit = try_rule_diagnosis(evidence)
+    if rule_hit is not None:
+        return DiagnosisResult(
+            concept_id=rule_hit.concept_id,
+            misconception_id=rule_hit.misconception_id,
+            confidence=rule_hit.confidence,
+            explanation=rule_hit.explanation,
+            evidence_refs=rule_hit.evidence_refs,
+            source="fallback",
+        )
     if client is None:
         fallback = fallback_diagnose(evidence)
         return DiagnosisResult(
