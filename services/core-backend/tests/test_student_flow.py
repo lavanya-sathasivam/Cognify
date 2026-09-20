@@ -30,118 +30,31 @@ import ast
 import sys
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 
 _HERE = Path(__file__).resolve()
 _ROOT = _HERE.parents[3]  # .../Cognify
 _SERVICE_DIR = _ROOT / "services" / "core-backend"
-for _p in (str(_ROOT), str(_SERVICE_DIR)):
+for _p in (str(_ROOT), str(_SERVICE_DIR), str(_HERE.parent)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+from fake_runner import (  # noqa: E402
+    CANONICAL_ID,
+    FIXED_CODE,
+    TRANSFER_CODE,
+    TRANSFER_ID,
+    WRONG_CODE,
+    make_client,
+)
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.main import create_app  # noqa: E402
 from packages.problem_bank import loader as bank_loader  # noqa: E402
 
 _APP_DIR = _SERVICE_DIR / "app"
 
-CANONICAL_ID = "PY-C3-COUNT-DIV"
-TRANSFER_ID = "PY-C3-COUNT-DIV-TRANSFER"
-
-WRONG_CODE = (
-    "RANGE_BUG\n"
-    "def count_divisible(nums, k):\n"
-    '    """Return how many numbers in nums are divisible by k."""\n'
-    "    count = 0\n"
-    "    for i in range(len(nums) - 1):\n"
-    "        if nums[i] % k == 0:\n"
-    "            count += 1\n"
-    "    return count\n"
-)
-
-FIXED_CODE = (
-    "def count_divisible(nums, k):\n"
-    '    """Return how many numbers in nums are divisible by k."""\n'
-    "    count = 0\n"
-    "    for x in nums:\n"
-    "        if x % k == 0:\n"
-    "            count += 1\n"
-    "    return count\n"
-)
-
-TRANSFER_CODE = (
-    "def count_cold_days(temps, threshold):\n"
-    '    """Return how many temperatures are strictly below threshold."""\n'
-    "    count = 0\n"
-    "    for t in temps:\n"
-    "        if t < threshold:\n"
-    "            count += 1\n"
-    "    return count\n"
-)
-
-
-def _buggy_canonical_output(stdin_data: str) -> str:
-    """Independent reimplementation of the off-by-one under test."""
-    parts = stdin_data.strip().split()
-    n, k = int(parts[0]), int(parts[1])
-    nums = list(map(int, parts[2:2 + n]))
-    count = 0
-    for i in range(len(nums) - 1):
-        if nums[i] % k == 0:
-            count += 1
-    return str(count) + "\n"
-
-
-class MarkerRunner:
-    """Fake runner dispatching on code markers (never runs student code)."""
-
-    language = "python"
-
-    def __init__(self) -> None:
-        canonical = bank_loader.load_problem(CANONICAL_ID)
-        transfer = bank_loader.load_problem(TRANSFER_ID)
-        self._canonical = {c.input: c.expected_output for c in canonical.all_tests()}
-        self._transfer = {c.input: c.expected_output for c in transfer.all_tests()}
-
-    def compile(self, code: str, timeout_seconds: float) -> None:
-        return None
-
-    def run_single(self, code: str, stdin_data: str, timeout_seconds: float):
-        if "HANG" in code:
-            return SimpleNamespace(
-                stdout="", stderr="", exit_code=0, timed_out=True, time_ms=5000
-            )
-        if "CRASH" in code:
-            return SimpleNamespace(
-                stdout="",
-                stderr="Traceback (most recent call last): ZeroDivisionError\n",
-                exit_code=1,
-                timed_out=False,
-                time_ms=5,
-            )
-        if "RANGE_BUG" in code and stdin_data in self._canonical:
-            return SimpleNamespace(
-                stdout=_buggy_canonical_output(stdin_data),
-                stderr="",
-                exit_code=0,
-                timed_out=False,
-                time_ms=5,
-            )
-        if "TRANSFER_BUG" in code and stdin_data in self._transfer:
-            return SimpleNamespace(
-                stdout="9999\n", stderr="", exit_code=0, timed_out=False, time_ms=5
-            )
-        expected = self._canonical.get(stdin_data, self._transfer.get(stdin_data))
-        return SimpleNamespace(
-            stdout=expected + "\n", stderr="", exit_code=0, timed_out=False, time_ms=5
-        )
-
 
 def _client() -> TestClient:
-    return TestClient(
-        create_app(runner_factory=lambda lang, timeout: MarkerRunner())
-    )
+    return make_client()
 
 
 def _new_session(client: TestClient) -> dict:

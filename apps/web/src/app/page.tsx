@@ -8,13 +8,16 @@
  * verification, recommendations) comes from core-backend; this screen
  * only renders server-provided JSON and never invents advice.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api,
   friendlyError,
   type ProblemView,
   type SubmissionResponse,
 } from "./lib/api";
+
+/** Must stay in sync with the backend cap (student.py MAX_CODE_CHARS). */
+const MAX_CODE_CHARS = 100_000;
 
 type Screen =
   | { kind: "loading" }
@@ -35,6 +38,8 @@ export default function LearnPage() {
   const [result, setResult] = useState<SubmissionResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Guards late responses: only the newest submit may update the screen.
+  const requestId = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,21 +68,30 @@ export default function LearnPage() {
       setError("Write some code before submitting.");
       return;
     }
+    if (code.length > MAX_CODE_CHARS) {
+      setError(
+        `That code is too long (${code.length} characters, max ${MAX_CODE_CHARS}). Shorten it and try again.`,
+      );
+      return;
+    }
+    const mine = ++requestId.current;
     setBusy(true);
     setError(null);
     try {
       const response = await api.submit(sessionId, problem.problem_id, code);
-      setResult(response);
+      if (requestId.current === mine) setResult(response);
     } catch (err: unknown) {
-      setError(friendlyError(err));
+      if (requestId.current === mine) setError(friendlyError(err));
     } finally {
-      setBusy(false);
+      // A stale (invalidated) response must not unlock the current request.
+      if (requestId.current === mine) setBusy(false);
     }
   }, [sessionId, problem, code, busy]);
 
   const continueToTransfer = useCallback(() => {
     const next = result?.transfer_problem;
     if (!next) return;
+    requestId.current += 1; // invalidate any in-flight submit
     setProblem(next);
     setCode(next.starter_code);
     setResult(null);
@@ -85,6 +99,7 @@ export default function LearnPage() {
   }, [result]);
 
   const retry = useCallback(() => {
+    requestId.current += 1; // invalidate any in-flight submit
     setResult(null);
     setError(null);
   }, []);
@@ -177,7 +192,7 @@ export default function LearnPage() {
               <button
                 type="button"
                 onClick={submit}
-                disabled={busy}
+                disabled={busy || !sessionId}
                 className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
               >
                 {busy ? "Running…" : "Submit"}

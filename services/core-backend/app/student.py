@@ -139,9 +139,14 @@ RunnerFactory = Callable[[str, float], Any]
 # ---------------------------------------------------------------------------
 # Step 15 intervention mapping (reused in-process via alias loading)
 # ---------------------------------------------------------------------------
-_AI_APP_DIR = Path(__file__).resolve().parents[3] / "services" / "ai-service" / "app"
+# Path anchor: the repo/image root is the parent of ``packages/``. Resolving
+# from the imported pipeline module (not ``__file__``) keeps this working
+# both in the repo checkout (services/core-backend/app/student.py) and in
+# the Docker image (where only app/ is copied to ./app but packages/ and
+# services/ sit beside it under /code).
+_REPO_ROOT = Path(pipe.__file__).resolve().parents[2]
+_AI_APP_DIR = _REPO_ROOT / "services" / "ai-service" / "app"
 _AI_ALIAS = "cognify_ai_app"
-_REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _ensure_ai_package() -> None:
