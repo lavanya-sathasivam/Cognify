@@ -3,7 +3,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useSession } from "./session";
+import { useSessionOptional } from "./session";
+import { Badge } from "./ui";
 
 const LINKS = [
   { href: "/", label: "Home" },
@@ -24,22 +25,22 @@ function useCurrentRoute(): string {
 
 export function SiteHeader() {
   const pathname = useCurrentRoute();
-  let track: string = "python";
-  try {
-    track = useSession().language ?? "python";
-  } catch {
-    track = "python";
-  }
+  const track = useSessionOptional()?.language ?? "python";
   const label = track === "java" ? "Java" : "Python";
   return (
     <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-6 py-4">
-        <Link
-          href="/"
-          className="text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50"
-        >
-          Cognify
-        </Link>
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-4 sm:px-6">
+        <div className="flex items-baseline gap-2">
+          <Link
+            href="/"
+            className="text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50"
+          >
+            Cognify
+          </Link>
+          <span className="hidden text-xs text-zinc-500 sm:inline dark:text-zinc-400">
+            adaptive programming practice
+          </span>
+        </div>
         <nav aria-label="Primary" className="flex flex-wrap items-center gap-1">
           {LINKS.map((link) => {
             const current =
@@ -63,8 +64,8 @@ export function SiteHeader() {
             );
           })}
         </nav>
-        <p className="ml-auto text-sm text-zinc-500 dark:text-zinc-400">
-          current language: {label}
+        <p className="ml-auto">
+          <Badge tone="info">{label} track</Badge>
         </p>
       </div>
     </header>

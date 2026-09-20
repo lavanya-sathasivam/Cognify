@@ -29,9 +29,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <SessionProvider>
           <div className="flex min-h-full flex-col bg-zinc-50 text-zinc-950 dark:bg-black dark:text-zinc-50">
             <SiteHeader />
-            <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-6 py-6">
+            <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6">
               {children}
             </main>
+            <footer className="border-t border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+              <p className="mx-auto w-full max-w-6xl px-4 py-4 text-xs text-zinc-500 sm:px-6 dark:text-zinc-400">
+                Cognify — adaptive programming practice in Python and Java.
+                Your code runs on the server; feedback is based on your actual
+                attempts.
+              </p>
+            </footer>
           </div>
         </SessionProvider>
       </body>

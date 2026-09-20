@@ -194,15 +194,17 @@ test("learn roadmap lists all eight concepts with honest states", async () => {
     </SessionProvider>,
   );
   expect(await screen.findByText("Learn Python")).toBeDefined();
+  // Student UI shows human-readable titles, never raw concept ids.
   for (const id of ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8"]) {
-    expect(await screen.findByText(new RegExp(`^${id} ·`))).toBeDefined();
+    expect(await screen.findByText(TITLES[id])).toBeDefined();
   }
+  expect(screen.queryByText(/C1 ·|C2 ·|C3 ·/)).toBeNull();
   // Backend groups structure the roadmap.
   expect(await screen.findByText("Foundations")).toBeDefined();
   expect(await screen.findByText("Recursion & Beyond")).toBeDefined();
   // Live C3 state uses a level label; everything else is honestly pending.
   expect(await screen.findByText("Developing")).toBeDefined();
-  expect(screen.getAllByText("Not started yet").length).toBeGreaterThanOrEqual(7);
+  expect(screen.getAllByText(/Not started yet/).length).toBeGreaterThanOrEqual(7);
   // No fabricated gamification or locks ("expressions" contains "xp",
   // hence word boundaries).
   expect(screen.queryByText(/\bXP\b|\bstreak\b|\blocked\b|\bbadge/i)).toBeNull();
@@ -235,7 +237,8 @@ test("progress shows real levels, transfer, hints, and recommendation", async ()
   // Current level is distinguished from mastery.
   expect(await screen.findByText("Not yet mastered — keep practicing")).toBeDefined();
   expect(await screen.findByText("Steady")).toBeDefined();
-  expect(await screen.findByText(/2 attempts · 1 correct/)).toBeDefined();
+  expect(await screen.findByText(/2 attempts · 1 solved/)).toBeDefined();
+  expect(await screen.findByText(/1 to retry/)).toBeDefined();
   expect(await screen.findByText(/No transfer attempts yet/)).toBeDefined();
   expect(await screen.findByText(/Working independently/)).toBeDefined();
   // Adaptive recommendation in student language.
@@ -244,7 +247,7 @@ test("progress shows real levels, transfer, hints, and recommendation", async ()
   ).toBeDefined();
   expect(screen.queryByText(/Mastery =|0\.\d+/)).toBeNull();
   expect(screen.queryByText(/C[1-8]-M\d{2}/)).toBeNull();
-  expect(screen.getAllByText("Not started yet").length).toBe(7);
+  expect(screen.getAllByText(/Not started yet/).length).toBe(7);
 });
 
 test("progress is honestly empty before any attempt", async () => {
@@ -340,4 +343,35 @@ test("history shows an error state when history fails to load", async () => {
     </SessionProvider>,
   );
   expect(await screen.findByText("Couldn't load your history.")).toBeDefined();
+});
+
+test("learn highlights the recommended concept and prerequisites", async () => {
+  vi.stubGlobal("fetch", mockFetch(conceptRoutes()));
+  render(
+    <SessionProvider>
+      <LearnPage />
+    </SessionProvider>,
+  );
+  expect(await screen.findByText("Recommended next")).toBeDefined();
+  expect((await screen.findAllByText(/Builds on:/)).length).toBe(7);
+});
+
+test("history shows attempt order and execution results without raw codes", async () => {
+  vi.stubGlobal(
+    "fetch",
+    mockFetch({
+      "POST /student/sessions": sessionPayload(),
+      "GET /student/history?session_id=sess-pages&limit=20": historyPayload(),
+    }),
+  );
+  render(
+    <SessionProvider>
+      <HistoryPage />
+    </SessionProvider>,
+  );
+  expect(await screen.findByText(/Attempt 1/)).toBeDefined();
+  expect(await screen.findByText(/Some tests failed/)).toBeDefined();
+  expect(await screen.findByText(/All tests passed/)).toBeDefined();
+  expect(screen.queryByText("FAILED")).toBeNull();
+  expect(screen.queryByText("PASSED")).toBeNull();
 });

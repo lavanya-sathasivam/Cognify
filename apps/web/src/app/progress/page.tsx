@@ -106,60 +106,68 @@ export default function ProgressPage() {
           body="Submit a solution on the Practice page and your progress will appear here."
         />
       ) : (
-        started.map((concept) => {
-          const recent = concept.recent_history.slice(-3);
-          const passed = recent.filter((r) => r.passed).length;
-          return (
-            <Card key={concept.concept_id} label={concept.title}>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-base font-semibold">
-                  {concept.concept_id} · {concept.title}
-                </h2>
-                <LevelLabel band={concept.band} />
-              </div>
-              <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-                <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
-                  <dt className="text-zinc-500 dark:text-zinc-400">
-                    Current level
-                  </dt>
-                  <dd className="mt-0.5 font-medium">
-                    {concept.mastery_claim
-                      ? "Strong — concept mastered"
-                      : "Not yet mastered — keep practicing"}
-                  </dd>
+          started.map((concept) => {
+            const recent = concept.recent_history.slice(-3);
+            const passed = recent.filter((r) => r.passed).length;
+            return (
+              <Card key={concept.concept_id} label={concept.title}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="text-base font-semibold">{concept.title}</h2>
+                  <LevelLabel band={concept.band} />
                 </div>
-                <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
-                  <dt className="text-zinc-500 dark:text-zinc-400">Trend</dt>
-                  <dd className="mt-0.5 font-medium">
-                    {trendLabel(concept.trend)}
-                  </dd>
-                </div>
-                <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
-                  <dt className="text-zinc-500 dark:text-zinc-400">Attempts</dt>
-                  <dd className="mt-0.5 font-medium">
-                    {concept.attempt_count}{" "}
-                    {concept.attempt_count === 1 ? "attempt" : "attempts"} ·{" "}
-                    {concept.pass_count} correct
-                    {recent.length > 0 &&
-                      ` · ${passed} of ${recent.length} recent correct`}
-                  </dd>
-                </div>
-                <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
-                  <dt className="text-zinc-500 dark:text-zinc-400">Transfer</dt>
-                  <dd className="mt-0.5 font-medium">
-                    {transferCopy(
-                      concept.transfer.attempts,
-                      concept.transfer.successes,
-                    )}
-                  </dd>
-                </div>
-              </dl>
-              <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">
-                {hintRelianceCopy(
-                  concept.hint_dependence,
-                  concept.hint_count,
-                )}
-              </p>
+                <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                  <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
+                    <dt className="text-zinc-500 dark:text-zinc-400">
+                      Current level
+                    </dt>
+                    <dd className="mt-0.5 font-medium">
+                      {concept.mastery_claim
+                        ? "Strong — concept mastered"
+                        : "Not yet mastered — keep practicing"}
+                    </dd>
+                  </div>
+                  <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
+                    <dt className="text-zinc-500 dark:text-zinc-400">Trend</dt>
+                    <dd className="mt-0.5 font-medium">
+                      {trendLabel(concept.trend)}
+                    </dd>
+                  </div>
+                  <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
+                    <dt className="text-zinc-500 dark:text-zinc-400">
+                      Attempts
+                    </dt>
+                    <dd className="mt-0.5 font-medium">
+                      {concept.attempt_count}{" "}
+                      {concept.attempt_count === 1 ? "attempt" : "attempts"} ·{" "}
+                      {concept.pass_count} solved · {concept.fail_count} to
+                      retry
+                      {recent.length > 0 &&
+                        ` · ${passed} of ${recent.length} recent correct`}
+                    </dd>
+                  </div>
+                  <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
+                    <dt className="text-zinc-500 dark:text-zinc-400">
+                      Transfer
+                    </dt>
+                    <dd className="mt-0.5 font-medium">
+                      {transferCopy(
+                        concept.transfer.attempts,
+                        concept.transfer.successes,
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+                <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">
+                  {hintRelianceCopy(
+                    concept.hint_dependence,
+                    concept.hint_count,
+                  )}
+                </p>
+                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                  {concept.active_misconception_count > 0
+                    ? `${concept.active_misconception_count} ${concept.active_misconception_count === 1 ? "area" : "areas"} still needs attention — see your next recommended step below.`
+                    : "No active weak areas right now."}
+                </p>
               {isDebugMode() && (
                 <pre className="mt-3 overflow-x-auto rounded-md bg-zinc-100 p-3 font-mono text-xs dark:bg-zinc-900">
                   {JSON.stringify(concept, null, 2)}
@@ -189,11 +197,9 @@ export default function ProgressPage() {
             .filter((c) => c.status === "not_started")
             .map((c) => (
               <Card key={c.concept_id} label={c.title}>
-                <h3 className="text-sm font-semibold">
-                  {c.concept_id} · {c.title}
-                </h3>
+                <h3 className="text-sm font-semibold">{c.title}</h3>
                 <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                  Not started yet
+                  Not started yet — no attempts recorded.
                 </p>
               </Card>
             ))}

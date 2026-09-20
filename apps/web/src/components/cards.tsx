@@ -23,20 +23,19 @@ export function ContinueCard({
   problemTitle: string | null;
 }) {
   const copy = stageCopy(journeyState.stage);
-  const cta =
-    journeyState.stage === "transfer_done" ? "/progress" : "/practice";
-  const ctaLabel =
-    journeyState.stage === "transfer_done" ? "See your progress" : "Practice";
+  const done = journeyState.stage === "transfer_done";
+  const cta = done ? "/progress" : "/practice";
+  const ctaLabel = done ? "See your progress" : "Continue practicing";
   return (
     <Card label="Continue learning">
       <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
         Continue learning
       </p>
       <h2 className="mt-1 text-lg font-semibold">{copy.title}</h2>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+      <p className="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
         {copy.detail}
       </p>
-      {problemTitle && journeyState.stage !== "transfer_done" && (
+      {problemTitle && !done && (
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
           Current problem: <span className="font-medium">{problemTitle}</span>
         </p>
@@ -44,9 +43,9 @@ export function ContinueCard({
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <Link
           href={cta}
-          className="rounded-lg bg-teal-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-teal-700 dark:bg-teal-200 dark:text-teal-950 dark:hover:bg-teal-100"
+          className="rounded-lg bg-teal-800 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-teal-700 dark:bg-teal-200 dark:text-teal-950 dark:hover:bg-teal-100"
         >
-          {ctaLabel}
+          {ctaLabel} →
         </Link>
         <LevelLabel band={journeyState.band} />
       </div>

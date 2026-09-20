@@ -174,7 +174,7 @@ test("problem renders with starter code and submit", async () => {
   renderPractice();
   expect(await screen.findByText("Cognify")).toBeDefined();
   expect(await screen.findByText("Count Divisible Numbers")).toBeDefined();
-  expect(await screen.findByText(/current language: Python/)).toBeDefined();
+  expect(await screen.findByText(/Python track/)).toBeDefined();
   const editor = (await screen.findByLabelText(
     "Your Python code",
   )) as HTMLTextAreaElement;
@@ -257,6 +257,38 @@ test("backend failure shows an error, never silent success", async () => {
   renderPractice();
   expect(await screen.findByText(/Couldn't start your session/)).toBeDefined();
   expect(screen.queryByText("✓ Good improvement")).toBeNull();
+});
+
+test("practice heading, steps, and problem context without raw ids", async () => {
+  vi.stubGlobal("fetch", mockFetch({ "POST /student/sessions": sessionPayload() }));
+  renderPractice();
+  expect(await screen.findByText("Practice Python")).toBeDefined();
+  expect(
+    await screen.findByRole("list", { name: "Practice progress" }),
+  ).toBeDefined();
+  expect(await screen.findByText("Loops & Iteration Control")).toBeDefined();
+  expect(await screen.findByText("Core practice")).toBeDefined();
+  expect(screen.queryByText(/C3 ·/)).toBeNull();
+});
+
+test("verified state explains the meaning in student language", async () => {
+  let calls = 0;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => {
+      calls += 1;
+      const body = calls === 1 ? sessionPayload() : verifiedPayload();
+      return { ok: true, status: 200, json: async () => body };
+    }),
+  );
+  renderPractice();
+  await screen.findByRole("button", { name: "Submit" });
+  fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+  expect(await screen.findByText("✓ Verified improvement")).toBeDefined();
+  expect(
+    await screen.findByText(/applied the idea to a related problem/),
+  ).toBeDefined();
+  expect(screen.queryByText("VERIFIED_IMPROVED")).toBeNull();
 });
 
 test("submission error surfaces the backend message", async () => {

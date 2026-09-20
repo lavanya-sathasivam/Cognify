@@ -16,7 +16,10 @@ import {
 } from "../../components/practice";
 import {
   Alert,
+  JourneySteps,
+  LanguageSwitcher,
   Loading,
+  PageHeading,
   SecondaryButton,
 } from "../../components/ui";
 import {
@@ -117,6 +120,17 @@ export default function PracticePage() {
     setError(null);
   }, []);
 
+  const activeTrack = (problem?.language ?? language) === "java" ? "java" : "python";
+  const stepIndex = !result
+    ? 0
+    : result.variant_role === "transfer"
+      ? result.verification?.outcome === "VERIFIED_IMPROVED"
+        ? 4
+        : 3
+      : result.outcome === "PASSED"
+        ? 3
+        : 1;
+
   if (status === "loading") {
     return <Loading text="Loading your problem…" />;
   }
@@ -133,32 +147,18 @@ export default function PracticePage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div
-        className="flex flex-wrap items-center gap-2"
-        role="group"
-        aria-label="Language track"
-      >
-        <span className="text-sm text-zinc-600 dark:text-zinc-300">
-          Language:
-        </span>
-        {(["python", "java"] as const).map((track) => (
-          <SecondaryButton
-            key={track}
-            onClick={() => void chooseLanguage(track)}
-            className={
-              (problem?.language ?? language) === track
-                ? "border-teal-700 font-semibold"
-                : undefined
-            }
-          >
-            {track === "python" ? "Python" : "Java"}
-          </SecondaryButton>
-        ))}
-        <span className="text-xs text-zinc-500 dark:text-zinc-400">
-          Switching starts a fresh {(language === "java" ? "Java" : "Python")}{" "}
-          session.
-        </span>
+    <div className="flex max-w-5xl flex-col gap-6">
+      <PageHeading
+        title={`Practice ${activeTrack === "java" ? "Java" : "Python"}`}
+        intro="Read the problem, write your code, and submit. Cognify runs your code, explains what went wrong, and checks the idea in a related problem."
+      />
+      <JourneySteps current={stepIndex} />
+      <div>
+        <LanguageSwitcher value={activeTrack} onChange={(t) => void chooseLanguage(t)} />
+        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          Switching starts a fresh {activeTrack === "java" ? "Java" : "Python"}{" "}
+          session — progress is per track.
+        </p>
       </div>
       {freshNotice && (
         <Alert tone="info" title="Fresh session started">

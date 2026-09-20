@@ -273,3 +273,8 @@ export function useSession(): SessionValue {
   if (!ctx) throw new Error("useSession must be used inside SessionProvider");
   return ctx;
 }
+
+/** Session outside a provider (e.g. header in isolation): null, never throws. */
+export function useSessionOptional(): SessionValue | null {
+  return useContext(SessionContext);
+}

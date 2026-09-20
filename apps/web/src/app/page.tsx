@@ -14,7 +14,15 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "../components/session";
 import { ContinueCard, FreshSessionNote, NextStepCard } from "../components/cards";
-import { Card, LevelLabel, Loading, PageHeading, SecondaryButton } from "../components/ui";
+import {
+  Badge,
+  Card,
+  LanguageSwitcher,
+  LevelLabel,
+  Loading,
+  PageHeading,
+  SecondaryButton,
+} from "../components/ui";
 import {
   api,
   type ConceptsResponse,
@@ -114,34 +122,37 @@ export default function HomePage() {
     "java"
       ? "Java"
       : "Python";
+  const track = trackLabel === "Java" ? "java" : "python";
   return (
     <div className="flex max-w-3xl flex-col gap-6">
-      <div
-        className="flex flex-wrap items-center gap-2"
-        role="group"
-        aria-label="Language track"
-      >
-        <span className="text-sm text-zinc-600 dark:text-zinc-300">
-          Language:
-        </span>
-        {(["python", "java"] as const).map((track) => (
-          <SecondaryButton
-            key={track}
-            onClick={() => void chooseLanguage(track)}
-            className={
-              trackLabel.toLowerCase() === track
-                ? "border-teal-700 font-semibold"
-                : undefined
-            }
-          >
-            {track === "python" ? "Python" : "Java"}
-          </SecondaryButton>
-        ))}
-      </div>
+      <LanguageSwitcher value={track} onChange={(t) => void chooseLanguage(t)} />
       <PageHeading
         title="Welcome to Cognify"
-        intro={`Practice real ${trackLabel} problems. Cognify runs your code, explains what went wrong, and checks that the idea sticks in a new problem.`}
+        intro={`Cognify is an adaptive programming tutor. Practice real ${trackLabel} problems — your code is executed, mistakes are explained in plain language, and a related problem checks the idea really stuck.`}
       />
+
+      <Card label="How it works">
+        <ol className="grid gap-3 text-sm sm:grid-cols-3">
+          <li className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+            <p className="font-semibold">1. Solve</p>
+            <p className="mt-1 text-zinc-600 dark:text-zinc-300">
+              Write {trackLabel} code for a real problem and submit it.
+            </p>
+          </li>
+          <li className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+            <p className="font-semibold">2. Get feedback</p>
+            <p className="mt-1 text-zinc-600 dark:text-zinc-300">
+              See which tests failed and what to try next.
+            </p>
+          </li>
+          <li className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+            <p className="font-semibold">3. Prove it transfers</p>
+            <p className="mt-1 text-zinc-600 dark:text-zinc-300">
+              Apply the same idea in a new context to verify it.
+            </p>
+          </li>
+        </ol>
+      </Card>
 
       {freshNotice && (
         <FreshSessionNote notice={freshNotice} onDismiss={dismissNotice} />
@@ -153,16 +164,24 @@ export default function HomePage() {
           problemTitle={problem?.title ?? null}
         />
       ) : (
-        <Card label="Continue learning">
-          <p className="text-sm text-zinc-600 dark:text-zinc-300">
-            Your session is ready — head to Practice to begin.
+        <Card label="Start learning">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            Start learning
           </p>
-          <div className="mt-3">
+          <h2 className="mt-1 text-lg font-semibold">
+            You haven&apos;t submitted anything yet
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+            Head to Practice to solve your first {trackLabel} problem. Your
+            progress will appear here once you begin — nothing is made up
+            before that.
+          </p>
+          <div className="mt-4">
             <Link
               href="/practice"
-              className="rounded-lg bg-teal-800 px-4 py-2 text-sm font-medium text-white dark:bg-teal-200 dark:text-teal-950"
+              className="rounded-lg bg-teal-800 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-teal-700 dark:bg-teal-200 dark:text-teal-950 dark:hover:bg-teal-100"
             >
-              Practice
+              Start practicing →
             </Link>
           </div>
         </Card>
@@ -192,9 +211,7 @@ export default function HomePage() {
                 className="flex flex-wrap items-center justify-between gap-2 text-sm"
               >
                 <span>
-                  <span className="font-medium">
-                    {c.concept_id} · {c.title}
-                  </span>{" "}
+                  <span className="font-medium">{c.title}</span>{" "}
                   <span className="text-zinc-500 dark:text-zinc-400">
                     · {c.attempt_count}{" "}
                     {c.attempt_count === 1 ? "attempt" : "attempts"}
@@ -224,15 +241,20 @@ export default function HomePage() {
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
             Recent activity
           </p>
-          <ul className="mt-2 flex flex-col gap-1 text-sm">
+          <ul className="mt-2 flex flex-col gap-2 text-sm">
             {recent.map((item) => (
-              <li key={item.order}>
+              <li
+                key={item.order}
+                className="flex flex-wrap items-center gap-x-2 gap-y-1"
+              >
                 <span className="font-medium">
                   {item.problem_title ?? "Problem"}
                 </span>{" "}
                 <span className="text-zinc-600 dark:text-zinc-300">
                   — {outcomeLabel(item.outcome, item.verified)}
                 </span>
+                {item.is_transfer && <Badge>New context</Badge>}
+                {item.verified && <Badge tone="success">Verified</Badge>}
               </li>
             ))}
           </ul>

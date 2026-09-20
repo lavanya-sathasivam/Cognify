@@ -157,3 +157,99 @@ export function Mark({ kind }: { kind: "pass" | "fail" | "warn" }) {
     </span>
   );
 }
+
+/** Small pill for track / transfer / verified markers (text always included). */
+export function Badge({
+  children,
+  tone = "neutral",
+}: {
+  children: ReactNode;
+  tone?: "neutral" | "success" | "warn" | "info";
+}) {
+  const tones: Record<string, string> = {
+    neutral:
+      "border-zinc-200 bg-zinc-100 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200",
+    success:
+      "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-100",
+    warn: "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100",
+    info: "border-teal-200 bg-teal-50 text-teal-950 dark:border-teal-800 dark:bg-teal-950 dark:text-teal-100",
+  };
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${tones[tone]}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+/** Python / Java track picker shared by Home and Practice. */
+export function LanguageSwitcher({
+  value,
+  onChange,
+}: {
+  value: "python" | "java";
+  onChange: (track: "python" | "java") => void;
+}) {
+  return (
+    <div
+      className="flex flex-wrap items-center gap-2"
+      role="group"
+      aria-label="Language track"
+    >
+      <span className="text-sm text-zinc-600 dark:text-zinc-300">
+        Language:
+      </span>
+      {(["python", "java"] as const).map((track) => {
+        const active = value === track;
+        return (
+          <SecondaryButton
+            key={track}
+            onClick={() => onChange(track)}
+            aria-pressed={active}
+            className={active ? "border-teal-700 font-semibold" : undefined}
+          >
+            {track === "python" ? "Python" : "Java"}
+          </SecondaryButton>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Where the student is in the Problem → Verify journey (practice only). */export function JourneySteps({ current }: { current: number }) {
+  const steps = ["Solve", "Feedback", "Retry", "Transfer", "Verified"];
+  return (
+    <ol
+      aria-label="Practice progress"
+      className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs"
+    >
+      {steps.map((label, i) => {
+        const done = i < current;
+        const here = i === current;
+        return (
+          <li key={label} className="flex items-center gap-2">
+            {i > 0 && (
+              <span aria-hidden="true" className="text-zinc-300 dark:text-zinc-700">
+                →
+              </span>
+            )}
+            <span
+              aria-current={here ? "step" : undefined}
+              className={
+                here
+                  ? "font-semibold text-teal-800 dark:text-teal-200"
+                  : done
+                    ? "text-zinc-700 dark:text-zinc-200"
+                    : "text-zinc-400 dark:text-zinc-500"
+              }
+            >
+              {done ? "✓ " : ""}
+              {label}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}

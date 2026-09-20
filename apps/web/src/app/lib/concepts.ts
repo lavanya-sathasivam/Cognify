@@ -93,3 +93,16 @@ export const CONCEPT_GROUPS: ConceptGroup[] = [
 export const ALL_CONCEPTS: ConceptMeta[] = CONCEPT_GROUPS.flatMap(
   (g) => g.concepts,
 );
+
+/** Human-readable concept title for a concept id (student UI never shows raw ids). */
+export function conceptTitle(conceptId: string | null | undefined): string | null {
+  if (!conceptId) return null;
+  return ALL_CONCEPTS.find((c) => c.concept_id === conceptId)?.title ?? null;
+}
+
+/** Student-friendly difficulty wording (raw numbers stay out of normal UI). */
+export function difficultyLabel(difficulty: number): string {
+  if (difficulty <= 1) return "Getting started";
+  if (difficulty === 2) return "Core practice";
+  return "Stretch";
+}

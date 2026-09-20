@@ -18,37 +18,56 @@ import {
   actionVerb as actionCopy,
   humanizeReason as humanReason,
   isDebugMode as debugMode,
+  stripCodes,
 } from "../app/lib/copy";
-import { Card, Mark, PrimaryButton, SecondaryButton } from "./ui";
+import { conceptTitle, difficultyLabel } from "../app/lib/concepts";
+import {
+  Alert,
+  Badge,
+  Card,
+  Mark,
+  PrimaryButton,
+  SecondaryButton,
+} from "./ui";
 
 export function ProblemPanel({ problem }: { problem: ProblemView }) {
+  const title = conceptTitle(problem.concept_id);
+  const langLabel = problem.language === "java" ? "Java" : "Python";
+  const isTransfer = problem.problem_id.endsWith("-TRANSFER");
   return (
     <Card label="Problem">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h2 className="text-lg font-semibold">{problem.title}</h2>
-        <span className="text-sm text-zinc-500 dark:text-zinc-400">
-          {problem.concept_id} · difficulty {problem.difficulty}
-        </span>
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone="info">{langLabel}</Badge>
+        <Badge>{difficultyLabel(problem.difficulty)}</Badge>
+        {isTransfer && <Badge tone="success">Related problem</Badge>}
       </div>
-      <p className="mt-3 whitespace-pre-wrap text-sm leading-6">
+      <h2 className="mt-3 text-xl font-semibold tracking-tight">
+        {problem.title}
+      </h2>
+      {title && (
+        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+          Concept: <span className="font-medium">{title}</span>
+        </p>
+      )}
+      <p className="mt-3 whitespace-pre-wrap text-sm leading-7">
         {problem.statement}
       </p>
-      <h3 className="mt-4 text-sm font-medium">Constraints</h3>
-      <ul className="mt-1 list-disc pl-5 text-sm text-zinc-600 dark:text-zinc-300">
+      <h3 className="mt-5 text-sm font-semibold">Constraints</h3>
+      <ul className="mt-1 list-disc pl-5 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
         {problem.constraints.map((c) => (
           <li key={c}>{c}</li>
         ))}
       </ul>
-      <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-        <div>
-          <h3 className="font-medium">Input format</h3>
-          <p className="mt-1 text-zinc-600 dark:text-zinc-300">
+      <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+        <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+          <h3 className="font-semibold">Input format</h3>
+          <p className="mt-1 leading-6 text-zinc-600 dark:text-zinc-300">
             {problem.input_format}
           </p>
         </div>
-        <div>
-          <h3 className="font-medium">Output format</h3>
-          <p className="mt-1 text-zinc-600 dark:text-zinc-300">
+        <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+          <h3 className="font-semibold">Output format</h3>
+          <p className="mt-1 leading-6 text-zinc-600 dark:text-zinc-300">
             {problem.output_format}
           </p>
         </div>
@@ -217,22 +236,22 @@ function FailedFeedback({
   onRetry: () => void;
 }) {
   const { execution } = result;
+  const total = execution.passed_count + execution.failed_count;
   return (
     <div>
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        Let&apos;s look at what happened.
-      </p>
-      <h2 className="mt-1 text-lg font-semibold">
-        Your code needs improvement
-      </h2>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-        You passed {execution.passed_count} of{" "}
-        {execution.passed_count + execution.failed_count} tests.
-        {execution.failed_test_id
-          ? ` First failure on test ${execution.failed_test_id}.`
-          : ""}
-      </p>
-      <TestList execution={execution} />
+      <Alert tone="error" title="Submission failed">
+        <p className="font-medium">Your code needs improvement</p>
+        <p className="mt-1">
+          You passed {execution.passed_count} of {total} tests.
+          {execution.failed_test_id
+            ? ` First failure on test ${execution.failed_test_id}.`
+            : ""}{" "}
+          Let&apos;s look at what happened.
+        </p>
+      </Alert>
+      <div className="mt-4">
+        <TestList execution={execution} />
+      </div>
       {result.diagnosis ? (
         <div className="mt-4">
           <h3 className="text-sm font-medium">Why your code failed</h3>
@@ -240,7 +259,7 @@ function FailedFeedback({
             {certaintyHeading(result.diagnosis.confidence_label)}:
           </p>
           <p className="mt-1 text-sm leading-6">
-            {result.diagnosis.explanation}
+            {stripCodes(result.diagnosis.explanation)}
           </p>
           <h3 className="mt-4 text-sm font-medium">Evidence</h3>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
@@ -280,10 +299,10 @@ export function InterventionCard({
     <div className="mt-4 rounded-lg border border-teal-200 bg-teal-50 p-4 dark:border-teal-800 dark:bg-teal-950">
       <h3 className="text-sm font-medium">What to try</h3>
       <p className="mt-1 text-sm font-medium text-zinc-700 dark:text-zinc-200">
-        Something to check: {intervention.student_message}
+        Something to check: {stripCodes(intervention.student_message)}
       </p>
       <p className="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-        {intervention.recommended_action}
+        {stripCodes(intervention.recommended_action)}
       </p>
       <DebugDetails
         data={{
@@ -312,16 +331,19 @@ export function ResultPanel({
   if (result.outcome === "PASSED" && result.variant_role !== "transfer") {
     return (
       <div>
-        <h2 className="text-lg font-semibold">✓ Good improvement</h2>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-          All {execution.passed_count} tests pass.
-        </p>
+        <Alert tone="success" title="✓ Good improvement">
+          <p>All {execution.passed_count} tests pass. You solved this problem.</p>
+        </Alert>
         {result.transfer_problem && (
-          <div className="mt-4">
+          <div className="mt-4 rounded-lg border border-teal-200 bg-teal-50 p-4 dark:border-teal-800 dark:bg-teal-950">
             <p className="text-sm font-medium">
-              Try a related problem to check the idea holds in a new context
+              Next: try a related problem to check the idea holds in a new
+              context
             </p>
-            <PrimaryButton onClick={onContinue} className="mt-2">
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+              {result.transfer_problem.title} — same idea, new situation.
+            </p>
+            <PrimaryButton onClick={onContinue} className="mt-3">
               Continue
             </PrimaryButton>
           </div>
@@ -332,16 +354,29 @@ export function ResultPanel({
 
   if (result.variant_role === "transfer" && result.verification) {
     const verified = result.verification.outcome === "VERIFIED_IMPROVED";
+    const masteredTitle = conceptTitle(conceptId) ?? "this concept";
     return (
       <div>
-        <h2 className="text-lg font-semibold">
-          {verified ? "✓ Verified improvement" : "Result recorded"}
-        </h2>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-          {result.verification.message}
-        </p>
+        {verified ? (
+          <Alert tone="success" title="✓ Verified improvement">
+            <p className="font-medium">
+              You fixed the original issue and applied the idea to a related
+              problem.
+            </p>
+            <p className="mt-1">{stripCodes(result.verification.message)}</p>
+          </Alert>
+        ) : (
+          <div>
+            <h2 className="text-lg font-semibold">Result recorded</h2>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+              {stripCodes(result.verification.message)}
+            </p>
+          </div>
+        )}
         {result.journey_state.mastery_claim ? (
-          <p className="mt-2 text-sm font-medium">You mastered {conceptId}.</p>
+          <p className="mt-3 text-sm font-medium">
+            You mastered {masteredTitle}.
+          </p>
         ) : null}
         <RecommendationList
           recommendations={result.recommendations}

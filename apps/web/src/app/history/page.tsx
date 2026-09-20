@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "../../components/session";
 import {
   Alert,
+  Badge,
   Card,
   EmptyState,
   Loading,
@@ -21,6 +22,23 @@ import {
 } from "../../components/ui";
 import { api, friendlyError, type HistoryResponse } from "../lib/api";
 import { outcomeLabel, stripCodes } from "../lib/copy";
+
+/** Student-friendly words for the raw execution status (never shown raw). */
+function executionLabel(status: string): string {
+  if (status === "PASSED") return "All tests passed";
+  if (status === "FAILED") return "Some tests failed";
+  if (status === "TIMEOUT") return "Ran too long (time limit)";
+  if (status === "ERROR") return "Error before finishing";
+  return "Attempt recorded";
+}
+
+/** Readable date for an ISO timestamp; falls back to attempt order. */
+function attemptWhen(createdAt: string | null, order: number): string {
+  if (!createdAt) return `Attempt ${order}`;
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return `Attempt ${order}`;
+  return `Attempt ${order} · ${date.toLocaleString()}`;
+}
 
 type LoadState =
   | { kind: "loading" }
@@ -117,18 +135,25 @@ export default function HistoryPage() {
               >
                 <div className="flex items-start gap-3">
                   <Mark kind={item.outcome === "passed" ? "pass" : "fail"} />
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <h2 className="text-base font-semibold">
                       {item.problem_title ?? "Problem"}{" "}
                       <span className="font-normal text-zinc-500 dark:text-zinc-400">
-                        · {item.concept_title ?? item.concept_id}
-                        {item.is_transfer ? " · new context" : ""}
+                        · {item.concept_title ?? "Concept"}
                       </span>
                     </h2>
-                    <p className="mt-1 text-sm font-medium">
-                      {outcomeLabel(item.outcome, item.verified)}
+                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                      {attemptWhen(item.created_at, item.order)} ·{" "}
+                      {executionLabel(item.execution_status)}
                     </p>
-                    <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                    <p className="mt-1 flex flex-wrap items-center gap-2 text-sm font-medium">
+                      {outcomeLabel(item.outcome, item.verified)}
+                      {item.is_transfer && <Badge>New context</Badge>}
+                      {item.verified && (
+                        <Badge tone="success">Improvement verified</Badge>
+                      )}
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
                       {stripCodes(item.feedback)}
                     </p>
                   </div>

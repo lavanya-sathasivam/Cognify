@@ -251,3 +251,20 @@ test("home reports backend failure without fake content", async () => {
   );
   expect(await screen.findByText(/Couldn't start your session/)).toBeDefined();
 });
+
+test("language track is visible and clearly selected", async () => {
+  vi.stubGlobal(
+    "fetch",
+    mockFetch({
+      "POST /student/sessions": sessionPayload(),
+      "GET /student/journey?session_id=sess-home": journeyPayload(),
+    }),
+  );
+  renderHome();
+  expect(await screen.findByText("Python track")).toBeDefined();
+  const group = await screen.findByRole("group", { name: "Language track" });
+  const python = within(group).getByRole("button", { name: "Python" });
+  const java = within(group).getByRole("button", { name: "Java" });
+  expect(python.getAttribute("aria-pressed")).toBe("true");
+  expect(java.getAttribute("aria-pressed")).toBe("false");
+});

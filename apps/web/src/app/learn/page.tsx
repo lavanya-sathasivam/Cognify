@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "../../components/session";
 import {
   Alert,
+  Badge,
   Card,
   LevelLabel,
   Loading,
@@ -95,12 +96,14 @@ export default function LearnPage() {
     if (existing) existing.ids.push(concept.concept_id);
     else groups.push({ group: concept.group, ids: [concept.concept_id] });
   }
+  const recommendedId = state.data.next_action?.concept_id ?? null;
+  const titleOf = (id: string) => byId.get(id)?.title ?? "an earlier concept";
 
   return (
     <div className="flex max-w-3xl flex-col gap-6">
       <PageHeading
         title={`Learn ${trackLabel}`}
-        intro="Eight concepts, from first variables to recursion. Work through problems and your progress appears here — starting with loops."
+        intro="Eight concepts, from first variables to recursion. Work through problems and your progress appears here."
       />
       {groups.map((group) => (
         <section key={group.group} aria-label={group.group}>
@@ -114,23 +117,33 @@ export default function LearnPage() {
               const started = concept.status === "started";
               const recent = concept.recent_history.slice(-3);
               const passed = recent.filter((r) => r.passed).length;
+              const recommended = recommendedId === concept.concept_id;
               return (
                 <Card key={concept.concept_id} label={concept.title}>
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <h3 className="text-base font-semibold">
-                      {concept.concept_id} · {concept.title}
-                    </h3>
-                    {started ? (
-                      <LevelLabel band={concept.band} />
-                    ) : (
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                        Not started yet
-                      </span>
-                    )}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-base font-semibold">{concept.title}</h3>
+                    <span className="flex flex-wrap items-center gap-2">
+                      {recommended && (
+                        <Badge tone="info">Recommended next</Badge>
+                      )}
+                      {started ? (
+                        <LevelLabel band={concept.band} />
+                      ) : (
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                          Not started yet
+                        </span>
+                      )}
+                    </span>
                   </div>
-                  <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+                  <p className="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
                     {concept.description}
                   </p>
+                  {concept.prerequisites.length > 0 && (
+                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                      Builds on:{" "}
+                      {concept.prerequisites.map(titleOf).join(" · ")}
+                    </p>
+                  )}
                   {started ? (
                     <div className="mt-2 flex flex-col gap-1 text-sm text-zinc-600 dark:text-zinc-300">
                       <p>
@@ -158,8 +171,8 @@ export default function LearnPage() {
                     </div>
                   ) : (
                     <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-                      Problems for this concept are coming — progress will
-                      appear here once you can practice it.
+                      No attempts yet — your progress will appear here once you
+                      practice this concept.
                     </p>
                   )}
                 </Card>
