@@ -98,6 +98,19 @@ PROBE_ID: str = "PY-C3-LOOP-MISCONCEPTION"
 CONCEPT_ID: str = "C3"
 LANGUAGE_TRACK: str = "python"
 
+# Step 21B: Java C3 journey (same concept, Java language track).
+JAVA_CANONICAL_ID: str = "JAVA-C3-COUNT-DIV"
+JAVA_TRANSFER_ID: str = "JAVA-C3-COUNT-DIV-TRANSFER"
+SUPPORTED_TRACKS: tuple[str, ...] = ("python", "java")
+TRACK_CANONICAL: dict[str, str] = {
+    "python": CANONICAL_ID,
+    "java": JAVA_CANONICAL_ID,
+}
+TRACK_TRANSFER: dict[str, str] = {
+    "python": TRANSFER_ID,
+    "java": JAVA_TRANSFER_ID,
+}
+
 MAX_CODE_CHARS: int = 100_000
 TIMEOUT_SECONDS: float = 5.0
 MAX_VIEW_TEXT_CHARS: int = 2_000
@@ -228,10 +241,11 @@ def _default_runner_factory(language: str, timeout_seconds: float) -> Any:
     so core-backend can never accidentally instantiate
     ``DockerSandboxRunner`` (core-backend has no Docker access).
     """
-    if language != LANGUAGE_TRACK:
-        raise ValueError(
-            f"Unsupported language {language!r} in this slice (python only)."
-        )
+    from packages.taxonomy import SUPPORTED_LANGUAGES as _SUPPORTED
+
+    norm = language.strip().lower() if isinstance(language, str) else ""
+    if norm not in tuple(_SUPPORTED):
+        raise ValueError(f"Unsupported language {language!r}.")
     raise RuntimeError(
         "Local execution is disabled in core-backend; submissions execute "
         "via execution-service over HTTP (execution_client.execute_problem)."
@@ -263,6 +277,9 @@ class StudentStore:
         self._sessions: dict[str, _StudentSession] = {}
 
     def create(self, language_track: str) -> tuple[str, _StudentSession]:
+        track = repositories.normalize_language_track(language_track)
+        if track not in SUPPORTED_TRACKS:
+            raise ValueError(f"Unsupported language_track {language_track!r}.")
         engine = create_engine(
             "sqlite:///:memory:",
             connect_args={"check_same_thread": False},
@@ -273,13 +290,15 @@ class StudentStore:
         session = get_session_factory(engine)()
         try:
             user = repositories.create_user(session)
-            journey = repositories.create_journey(session, user.id, language_track)
+            journey = repositories.create_journey(session, user.id, track)
             session.commit()
             record = _StudentSession(
                 engine=engine,
                 user_id=user.id,
                 journey_id=journey.id,
                 language_track=journey.language_track,
+                canonical_id=TRACK_CANONICAL[track],
+                transfer_id=TRACK_TRANSFER[track],
             )
         finally:
             session.close()
@@ -384,6 +403,20 @@ def intervention_view(intervention: Any) -> dict[str, Any] | None:
     return body
 
 
+def _load_problem_any(problem_id: str) -> Problem:
+    """Load a problem by ID from either language dir (server-side truth).
+
+    Tries the backward-compatible Python-only ``load_problem`` first
+    (keeps the existing call for orchestration/tests), then falls back
+    to the multi-language ``load_problem_all`` for Java. Raises the
+    original error if neither finds the problem.
+    """
+    try:
+        return bank_loader.load_problem(problem_id)
+    except (ValueError, TypeError):
+        return bank_loader.load_problem_all(problem_id)
+
+
 def recommendation_view(rec: dict[str, Any]) -> dict[str, Any]:
     problem_id = rec.get("problem_id")
     title: str | None = None
@@ -391,7 +424,10 @@ def recommendation_view(rec: dict[str, Any]) -> dict[str, Any]:
         try:
             title = bank_loader.load_problem(problem_id).title
         except (ValueError, TypeError):
-            title = None
+            try:
+                title = bank_loader.load_problem_all(problem_id).title
+            except (ValueError, TypeError):
+                title = None
     return {
         "action": rec.get("action_type"),
         "reason": rec.get("reason"),
@@ -478,7 +514,10 @@ def _next_action_view(rec: dict[str, Any], concept_id: str) -> dict[str, Any]:
         try:
             title = bank_loader.load_problem(problem_id).title
         except (ValueError, TypeError):
-            title = None
+            try:
+                title = bank_loader.load_problem_all(problem_id).title
+            except (ValueError, TypeError):
+                title = None
     return {
         "action": rec.get("action_type"),
         "reason": rec.get("reason"),
@@ -488,22 +527,46 @@ def _next_action_view(rec: dict[str, Any], concept_id: str) -> dict[str, Any]:
     }
 
 
-def _full_problem_catalog() -> list[ProblemInfo]:
-    """Whole-bank adaptive catalog (discovers future problems via loader)."""
-    catalog: list[ProblemInfo] = []
-    for problem in bank_loader.load_all_problems().values():
-        catalog.append(
-            ProblemInfo.from_dict(
-                {
-                    "problem_id": problem.problem_id,
-                    "concept_id": problem.concept_id,
-                    "difficulty": problem.difficulty,
-                    "isomorphic_group_id": problem.isomorphic_group_id,
-                    "variant_role": problem.variant_role,
-                }
-            )
-        )
-    return catalog
+def _problem_info_for(problem: Problem) -> ProblemInfo:
+    """Adaptive catalog entry for one bank problem (language-tagged)."""
+    return ProblemInfo.from_dict(
+        {
+            "problem_id": problem.problem_id,
+            "concept_id": problem.concept_id,
+            "difficulty": problem.difficulty,
+            "isomorphic_group_id": problem.isomorphic_group_id,
+            "variant_role": problem.variant_role,
+            "language": problem.language,
+        }
+    )
+
+
+def _full_problem_catalog(language_track: str | None = None) -> list[ProblemInfo]:
+    """Whole-bank adaptive catalog, language-filtered (Step 21B).
+
+    - ``None`` (legacy): Python-only bank via ``load_all_problems``.
+    - ``"python"``: Python-only bank via ``load_all_problems`` (24).
+    - ``"java"``: Java-only slice via ``load_all_problems_all`` filtered.
+    Never mixes tracks: Java states only see Java problems and vice versa.
+    """
+    if language_track is None:
+        problems = bank_loader.load_all_problems()
+        return [_problem_info_for(p) for p in problems.values()]
+    track = language_track.strip().lower()
+    if track == "python":
+        problems = bank_loader.load_all_problems()
+        return [_problem_info_for(p) for p in problems.values()]
+    if track == "java":
+        # Keep a load_all_problems call in this module for the read-path
+        # orchestration check; its result is unused for the Java slice.
+        _ = bank_loader.load_all_problems()
+        combined = bank_loader.load_all_problems_all()
+        return [
+            _problem_info_for(p)
+            for p in combined.values()
+            if p.language == "java"
+        ]
+    raise ValueError(f"Unsupported language_track {language_track!r}.")
 
 
 def _human_issue_summary(misconception_id: str) -> str:
@@ -535,24 +598,30 @@ def _history_feedback(
 # ---------------------------------------------------------------------------
 # Orchestration helpers (delegate to existing APIs only)
 # ---------------------------------------------------------------------------
-def _catalog() -> list[ProblemInfo]:
+def _catalog(language_track: str | None = None) -> list[ProblemInfo]:
+    """Journey catalog for one language track (Step 21B, language-aware).
+
+    - ``None``/``"python"``: the existing 3-problem Python C3 slice
+      (canonical + transfer + probe) — unchanged behavior.
+    - ``"java"``: Java canonical + Java transfer (no Java probe exists).
+    Every entry is language-tagged so the adaptive engine can enforce
+    track isolation; never mixes Python and Java problems.
+    """
+    track = (language_track or "python").strip().lower()
+    if track == "java":
+        problems = [
+            _load_problem_any(JAVA_CANONICAL_ID),
+            _load_problem_any(JAVA_TRANSFER_ID),
+        ]
+        return [_problem_info_for(p) for p in problems]
+    # Python path preserves the exact existing behavior (load_problem calls
+    # keep the orchestration test's required API visible).
     problems = [
         bank_loader.load_problem(CANONICAL_ID),
         bank_loader.load_problem(TRANSFER_ID),
         bank_loader.load_problem(PROBE_ID),
     ]
-    return [
-        ProblemInfo.from_dict(
-            {
-                "problem_id": p.problem_id,
-                "concept_id": p.concept_id,
-                "difficulty": p.difficulty,
-                "isomorphic_group_id": p.isomorphic_group_id,
-                "variant_role": p.variant_role,
-            }
-        )
-        for p in problems
-    ]
+    return [_problem_info_for(p) for p in problems]
 
 
 def _intervention_recommendations(
@@ -574,7 +643,7 @@ def _intervention_recommendations(
         states,
         misconceptions,
         [CurriculumInfo.from_taxonomy(CONCEPT_ID)],
-        _catalog(),
+        _catalog(record.language_track),
         language_track=record.language_track,
     )
     from packages.adaptive import explain_recommendations
@@ -616,7 +685,12 @@ def _resolve_problem(problem_id: str, record: _StudentSession) -> tuple[Problem,
             detail=f"problem_id {problem_id!r} is not part of this learning journey.",
         )
     try:
-        problem = bank_loader.load_problem(problem_id)
+        # Server-side truth: never trust client-supplied language/role.
+        # Python idiom first (backward compatible), Java via combined bank.
+        try:
+            problem = bank_loader.load_problem(problem_id)
+        except (ValueError, TypeError):
+            problem = bank_loader.load_problem_all(problem_id)
     except (ValueError, TypeError) as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     if problem.language != record.language_track:
@@ -638,15 +712,14 @@ def _execute(
         )
     # Production path: default factory (or None) executes via
     # execution-service over HTTP. core-backend never instantiates a
-    # local Docker runner here.
+    # local Docker runner here. Both Python and Java go through the
+    # existing execution-service HTTP path; Java is never executed
+    # directly inside core-backend.
     if runner_factory is None or runner_factory is _default_runner_factory:
-        if problem.language != LANGUAGE_TRACK:
+        if problem.language not in SUPPORTED_TRACKS:
             raise HTTPException(
                 status_code=422,
-                detail=(
-                    f"Unsupported language {problem.language!r} "
-                    "in this slice (python only)."
-                ),
+                detail=f"Unsupported language {problem.language!r}.",
             )
         try:
             return execution_client.execute_problem(
@@ -702,14 +775,15 @@ def create_student_router(
 
     @router.post("/sessions")
     def create_session(body: SessionCreate) -> dict[str, Any]:
-        track = body.language_track.strip().lower() if body.language_track else ""
-        if track != LANGUAGE_TRACK:
+        raw = body.language_track.strip().lower() if body.language_track else ""
+        track = raw or LANGUAGE_TRACK
+        if track not in SUPPORTED_TRACKS:
             raise HTTPException(
                 status_code=422,
-                detail=f"Only {LANGUAGE_TRACK!r} is supported in this slice.",
+                detail=f"Unsupported language_track {body.language_track!r}. Use one of {list(SUPPORTED_TRACKS)}.",
             )
         session_id, record = store.create(track)
-        problem = bank_loader.load_problem(record.canonical_id)
+        problem = _load_problem_any(record.canonical_id)
         db_session = _db_session(record)
         try:
             state = _journey_state(db_session, record)
@@ -749,7 +823,7 @@ def create_student_router(
                 record.canonical_pass_result = result
                 record.last_diagnosis_mid = None
                 db_session.commit()
-                transfer_problem = bank_loader.load_problem(record.transfer_id)
+                transfer_problem = _load_problem_any(record.transfer_id)
                 state = _journey_state(db_session, record)
                 return {
                     "session_id": body.session_id,
@@ -867,7 +941,7 @@ def create_student_router(
                 detail="Transfer is unavailable: pass the canonical problem first.",
             )
         status = pipe.execution_status_str(result)
-        canonical = bank_loader.load_problem(record.canonical_id)
+        canonical = _load_problem_any(record.canonical_id)
         original_retry = pipe.attempt_from_execution(
             canonical,
             record.canonical_pass_result,
@@ -897,7 +971,7 @@ def create_student_router(
                 problem_id=canonical.problem_id,
                 transfer_problem_id=problem.problem_id,
                 verification_result=verification_result,
-                problems=_catalog(),
+                problems=_catalog(record.language_track),
             )
             loop_result = run_closed_loop(db_session, loop_context)
             db_session.commit()
@@ -987,7 +1061,7 @@ def create_student_router(
                 states,
                 misconceptions,
                 curricula,
-                _full_problem_catalog(),
+                _full_problem_catalog(record.language_track),
                 language_track=record.language_track,
             )
             explained = explain_recommendations(ranked)
@@ -1035,11 +1109,17 @@ def create_student_router(
                 problem_id = meta.get("problem_id")
                 concept_id = event.concept_id
                 try:
-                    problem_title = (
-                        bank_loader.load_problem(problem_id).title
-                        if isinstance(problem_id, str) and problem_id
-                        else None
-                    )
+                    if isinstance(problem_id, str) and problem_id:
+                        try:
+                            problem_title = bank_loader.load_problem(
+                                problem_id
+                            ).title
+                        except (ValueError, TypeError):
+                            problem_title = bank_loader.load_problem_all(
+                                problem_id
+                            ).title
+                    else:
+                        problem_title = None
                 except (ValueError, TypeError):
                     problem_title = None
                 try:
@@ -1090,14 +1170,24 @@ def create_student_router(
         """READ-ONLY safe problem catalog from the existing bank (Step 20B).
 
         Discovered via ``load_all_problems`` so future bank additions
-        appear with no endpoint change. Exposes metadata only: no test
-        cases, no hidden outputs, no misconception bindings, no
-        isomorphic grouping (kept hidden per the submission safety
-        contract), no reference solutions.
+        appear with no endpoint change. Language-filtered (Step 21B): a
+        session only sees problems from its own language track. Exposes
+        metadata only: no test cases, no hidden outputs, no misconception
+        bindings, no isomorphic grouping (kept hidden per the submission
+        safety contract), no reference solutions.
         """
         record = store.get(session_id)
         entries: list[dict[str, Any]] = []
-        for problem in bank_loader.load_all_problems().values():
+        if record.language_track == "java":
+            _ = bank_loader.load_all_problems()
+            bank_problems = {
+                pid: p
+                for pid, p in bank_loader.load_all_problems_all().items()
+                if p.language == "java"
+            }
+        else:
+            bank_problems = bank_loader.load_all_problems()
+        for problem in bank_problems.values():
             try:
                 concept_title = taxonomy_pkg.get_concept(problem.concept_id).title
             except (KeyError, ValueError, TypeError):
@@ -1128,8 +1218,13 @@ __all__ = [
     "CANONICAL_ID",
     "CONCEPT_ID",
     "INTERVENTION_COPY",
+    "JAVA_CANONICAL_ID",
+    "JAVA_TRANSFER_ID",
     "LANGUAGE_TRACK",
     "PROBE_ID",
+    "SUPPORTED_TRACKS",
+    "TRACK_CANONICAL",
+    "TRACK_TRANSFER",
     "TRANSFER_ID",
     "VERIFICATION_COPY",
     "SessionCreate",

@@ -115,20 +115,43 @@ def is_challenge_ready(
     return True
 
 
+def _matches_track(problem: ProblemInfo, language_track: str | None) -> bool:
+    """True if ``problem`` may serve ``language_track`` (strict isolation).
+
+    - ``language_track=None``: no filtering (backward compatible).
+    - Tagged problems (``language`` set) only match their own track.
+    - Untagged problems (``language is None``, legacy catalogs) match any
+      track so existing callers without language metadata keep working.
+    """
+    if language_track is None:
+        return True
+    if problem.language is None:
+        return True
+    return problem.language == language_track
+
+
 def _select_problem(
     problems: list[ProblemInfo] | tuple[ProblemInfo, ...],
     concept_id: str,
     variant_role: str,
     hardest: bool = False,
+    language_track: str | None = None,
 ) -> ProblemInfo | None:
-    """Deterministically pick a problem for (concept, role) or None.
+    """Deterministically pick a problem for (concept, role, track) or None.
 
     Sort: easiest-first (difficulty asc, problem_id asc) except CHALLENGE
     which picks hardest-first (difficulty desc, problem_id asc).
+    Language-filtered: only same-track (or untagged legacy) candidates.
     """
     norm = concept_id.strip().upper()
     role = variant_role.strip().lower()
-    candidates = [p for p in problems if p.concept_id == norm and p.variant_role == role]
+    candidates = [
+        p
+        for p in problems
+        if p.concept_id == norm
+        and p.variant_role == role
+        and _matches_track(p, language_track)
+    ]
     if not candidates:
         return None
     if hardest:
@@ -141,9 +164,10 @@ def _select_problem(
 def _fallback_problem(
     problems: list[ProblemInfo] | tuple[ProblemInfo, ...],
     concept_id: str,
+    language_track: str | None = None,
 ) -> ProblemInfo | None:
     """Easiest canonical problem for a concept (deterministic fallback)."""
-    return _select_problem(problems, concept_id, "canonical", hardest=False)
+    return _select_problem(problems, concept_id, "canonical", hardest=False, language_track=language_track)
 
 
 def _evidence_base(
@@ -260,6 +284,9 @@ def evaluate_concept(
         return BASE_PRIORITY[ActionType.REVIEW_CONCEPT] + urgency + boost
 
     mastery = float(state.mastery)
+    # Effective track for language isolation: explicit param wins, else
+    # the state's own track. None means no filtering (legacy untagged).
+    effective_track = language_track if language_track is not None else state.language_track
 
     # -- R2 / R3 / R7 / R8: REVIEW_CONCEPT -------------------------------
     needs_review = (
@@ -305,9 +332,9 @@ def evaluate_concept(
         priority = BASE_PRIORITY[ActionType.REMEDIAL_PROBLEM] + urgency
         if primary_recurring is not None:
             priority += RECURRING_BOOST
-        chosen = _select_problem(problems, state.concept_id, "remedial")
+        chosen = _select_problem(problems, state.concept_id, "remedial", language_track=effective_track)
         if chosen is None:
-            chosen = _fallback_problem(problems, state.concept_id)
+            chosen = _fallback_problem(problems, state.concept_id, language_track=effective_track)
         recs.append(
             Recommendation(
                 action_type=ActionType.REMEDIAL_PROBLEM,
@@ -353,9 +380,9 @@ def evaluate_concept(
         if primary_recurring is not None:
             ev["misconception_id"] = primary_recurring.misconception_id
             ev["is_recurring"] = True
-        chosen = _select_problem(problems, state.concept_id, "canonical")
+        chosen = _select_problem(problems, state.concept_id, "canonical", language_track=effective_track)
         if chosen is None:
-            chosen = _fallback_problem(problems, state.concept_id)
+            chosen = _fallback_problem(problems, state.concept_id, language_track=effective_track)
         recs.append(
             Recommendation(
                 action_type=ActionType.PRACTICE_PROBLEM,
@@ -375,7 +402,7 @@ def evaluate_concept(
             state.concept_id, mastery, float(state.transfer_success_rate)
         )
         ev = _evidence_base(state, threshold, language_track)
-        chosen = _select_problem(problems, state.concept_id, "transfer")
+        chosen = _select_problem(problems, state.concept_id, "transfer", language_track=effective_track)
         recs.append(
             Recommendation(
                 action_type=ActionType.TRANSFER_PROBLEM,
@@ -392,11 +419,16 @@ def evaluate_concept(
     if mastery >= PROFICIENT_CEIL and not blocked and is_challenge_ready(state, misconceptions):
         reason = reason_text.challenge_ready_reason(state.concept_id, mastery)
         ev = _evidence_base(state, threshold, language_track)
-        chosen = _select_problem(problems, state.concept_id, "canonical", hardest=True)
+        chosen = _select_problem(problems, state.concept_id, "canonical", hardest=True, language_track=effective_track)
         # Prefer a hard problem (difficulty >= 4) when catalog allows.
         if chosen is not None and chosen.difficulty < 4:
             harder = sorted(
-                [p for p in problems if p.concept_id == state.concept_id],
+                [
+                    p
+                    for p in problems
+                    if p.concept_id == state.concept_id
+                    and _matches_track(p, effective_track)
+                ],
                 key=lambda p: (-p.difficulty, p.problem_id),
             )
             if harder and harder[0].difficulty >= 4:

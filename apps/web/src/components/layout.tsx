@@ -1,8 +1,9 @@
-/** Site header + primary navigation (Step 20A). */
+/** Site header + primary navigation (Step 20A, 21B language-aware). */
 "use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "./session";
 
 const LINKS = [
   { href: "/", label: "Home" },
@@ -23,6 +24,13 @@ function useCurrentRoute(): string {
 
 export function SiteHeader() {
   const pathname = useCurrentRoute();
+  let track: string = "python";
+  try {
+    track = useSession().language ?? "python";
+  } catch {
+    track = "python";
+  }
+  const label = track === "java" ? "Java" : "Python";
   return (
     <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-6 py-4">
@@ -56,7 +64,7 @@ export function SiteHeader() {
           })}
         </nav>
         <p className="ml-auto text-sm text-zinc-500 dark:text-zinc-400">
-          current language: Python
+          current language: {label}
         </p>
       </div>
     </header>

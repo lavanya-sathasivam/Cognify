@@ -1,0 +1,51 @@
+{
+  "problem_id": "JAVA-C3-COUNT-DIV-TRANSFER",
+  "concept_id": "C3",
+  "language": "java",
+  "difficulty": 2,
+  "title": "Count Cold Days",
+  "description": "A weather station recorded n daily temperatures. Read an integer threshold and the n readings, then count how many days were strictly colder than the threshold, using a loop and an accumulator. A reading t counts only when t < threshold; a reading exactly equal to the threshold does not count. This is the transfer variant of 'Count Divisible Numbers': same loop-bounds and accumulator skill, different surface story and filter predicate. Implement your solution in Java inside the provided Main class; read from standard input and print the answer to standard output.",
+  "constraints": [
+    "1 <= n <= 1000",
+    "-100 <= threshold <= 100",
+    "Each of the n temperatures satisfies -100 <= value <= 100"
+  ],
+  "starter_code": "public class Main {\n    public static int countColdDays(int[] temps, int threshold) {\n        // TODO: implement using a loop and an accumulator\n        throw new UnsupportedOperationException(\"Not implemented\");\n    }\n\n    public static void main(String[] args) throws Exception {\n        java.util.Scanner sc = new java.util.Scanner(System.in);\n        if (!sc.hasNextInt()) {\n            return;\n        }\n        int n = sc.nextInt();\n        if (!sc.hasNextInt()) {\n            return;\n        }\n        int threshold = sc.nextInt();\n        int[] temps = new int[n];\n        for (int i = 0; i < n && sc.hasNextInt(); i++) {\n            temps[i] = sc.nextInt();\n        }\n        System.out.println(countColdDays(temps, threshold));\n    }\n}\n",
+  "input_format": "First line: two integers n and threshold separated by a space. Second line: n integers (the daily temperatures) separated by spaces.",
+  "output_format": "A single integer: how many of the n temperatures are strictly below threshold.",
+  "public_tests": [
+    {
+      "id": "P1",
+      "input": "5 0\n-3 5 0 -1 2\n",
+      "expected_output": "2"
+    },
+    {
+      "id": "P2",
+      "input": "4 10\n10 9 11 8\n",
+      "expected_output": "2"
+    }
+  ],
+  "hidden_tests": [
+    {
+      "id": "H1",
+      "input": "1 -5\n-5\n",
+      "expected_output": "0"
+    },
+    {
+      "id": "H2",
+      "input": "6 100\n1 2 3 4 5 6\n",
+      "expected_output": "6"
+    },
+    {
+      "id": "H3",
+      "input": "3 0\n0 0 0\n",
+      "expected_output": "0"
+    }
+  ],
+  "isomorphic_group_id": "ISO-C3-COUNT-DIV-JAVA",
+  "variant_role": "transfer",
+  "misconception_ids": [
+    "C3-M01",
+    "C3-M04"
+  ]
+}

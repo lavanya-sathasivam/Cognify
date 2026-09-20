@@ -380,8 +380,12 @@ class RemoteSubmissionTests(unittest.TestCase):
         """E: _default_runner_factory fails closed instead of using Docker."""
         with self.assertRaises(RuntimeError):
             student_mod._default_runner_factory("python", 5.0)
-        with self.assertRaises(ValueError):
+        # Step 21B: java is supported via the HTTP path (still fails closed
+        # locally, never creates a Docker runner).
+        with self.assertRaises(RuntimeError):
             student_mod._default_runner_factory("java", 5.0)
+        with self.assertRaises(ValueError):
+            student_mod._default_runner_factory("cobol", 5.0)
         source = Path(student_mod.__file__).read_text(encoding="utf-8")
         factory_src = source.split("def _default_runner_factory")[1].split(
             "\n# ---", 1

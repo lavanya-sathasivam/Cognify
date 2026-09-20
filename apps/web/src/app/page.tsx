@@ -34,6 +34,7 @@ export default function HomePage() {
     dismissNotice,
     restart,
     refresh,
+    chooseLanguage,
   } = useSession();
   const [concepts, setConcepts] = useState<ConceptsResponse | null>(null);
   const [history, setHistory] = useState<HistoryResponse | null>(null);
@@ -108,11 +109,38 @@ export default function HomePage() {
   );
   const recent = history?.items?.slice(-2).reverse() ?? [];
 
+  const trackLabel =
+    (session?.language_track ?? journey?.language_track ?? problem?.language) ===
+    "java"
+      ? "Java"
+      : "Python";
   return (
     <div className="flex max-w-3xl flex-col gap-6">
+      <div
+        className="flex flex-wrap items-center gap-2"
+        role="group"
+        aria-label="Language track"
+      >
+        <span className="text-sm text-zinc-600 dark:text-zinc-300">
+          Language:
+        </span>
+        {(["python", "java"] as const).map((track) => (
+          <SecondaryButton
+            key={track}
+            onClick={() => void chooseLanguage(track)}
+            className={
+              trackLabel.toLowerCase() === track
+                ? "border-teal-700 font-semibold"
+                : undefined
+            }
+          >
+            {track === "python" ? "Python" : "Java"}
+          </SecondaryButton>
+        ))}
+      </div>
       <PageHeading
         title="Welcome to Cognify"
-        intro="Practice real Python problems. Cognify runs your code, explains what went wrong, and checks that the idea sticks in a new problem."
+        intro={`Practice real ${trackLabel} problems. Cognify runs your code, explains what went wrong, and checks that the idea sticks in a new problem.`}
       />
 
       {freshNotice && (

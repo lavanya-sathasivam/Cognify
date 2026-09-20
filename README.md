@@ -196,7 +196,7 @@ Cognify/
 │   └── problem_bank/         # Problem loader + execution/diagnosis pipeline + journey
 ├── problem-bank/
 │   ├── python/               # Python problems + tests (canonical + transfer + probe)
-│   └── java/                 # Reserved (currently empty; Java UI flow not exposed)
+│   └── java/                 # Java C3 pair (Step 21A: canonical + transfer); Java UI flow not exposed yet
 ├── tests/                    # Cross-service test suites (reserved)
 ├── docs/                     # Architecture / API notes (reserved, currently empty)
 ├── infra/                    # Deploy manifests (reserved, currently empty)
@@ -380,6 +380,21 @@ The C3 trio is unchanged from earlier steps. C8 covers the recursion
 family only (base/progress cases), not exceptions or complexity — those
 remain taxonomy entries without bank problems.
 
+Step 21A adds the first Java C3 isomorphic pair (same loop-bounds and
+accumulator skill, Java `Main`-class convention):
+
+| Problem ID | Title | Concept | Role | Group |
+|------------|-------|---------|------|-------|
+| `JAVA-C3-COUNT-DIV` | Count Divisible Numbers | C3 | canonical | `ISO-C3-COUNT-DIV-JAVA` |
+| `JAVA-C3-COUNT-DIV-TRANSFER` | Count Cold Days | C3 | transfer | `ISO-C3-COUNT-DIV-JAVA` |
+
+2 Java problems total (2 public + 3 hidden tests each, mirroring the
+Python C3 test data). The loader defaults to the Python-only bank for
+backward compatibility; the new explicit `*_all` helpers
+(`list_problem_ids_all` / `load_all_problems_all` / `load_problem_all`
+in `packages/problem_bank/loader.py`) discover both `problem-bank/python`
+and `problem-bank/java` with cross-language duplicate-ID detection.
+
 - Each problem declares `concept_id`, `language`, `difficulty` (1–3 in the
   current bank),
   `variant_role` (`canonical`/`transfer`/`remedial`), `misconception_ids`
@@ -393,8 +408,10 @@ remain taxonomy entries without bank problems.
 - Deterministic diagnosis rules still cover selected C3/Python patterns
   only; all new C1/C2/C4–C8 failures honestly use the fallback/LLM path
   (no new problem claims a rule-covered misconception).
-- The bank is Python-only in this step; `problem-bank/java/` is still reserved.
-- `problem-bank/java/` is reserved and currently empty.
+- The bank holds 24 Python problems plus the Step 21A Java C3 pair
+  (canonical + transfer); the loader defaults to Python-only with
+  explicit `*_all` helpers for both languages.
+- `problem-bank/java/` holds the first Java C3 pair (Step 21A).
 
 ## 13. Code execution architecture
 
@@ -511,7 +528,8 @@ All learning state (roadmap, mastery, history) is namespaced per
 `(user, language_track)`. The taxonomy supports both tracks
 (`SUPPORTED_LANGUAGES = (python, java)`), and the execution service runs
 both in Docker — but the current student-facing demo is Python-focused and
-the UI does not expose the Java track yet. `problem-bank/java/` is reserved.
+the UI does not expose the Java track yet. `problem-bank/java/` holds the
+first Java C3 pair (Step 21A bank content only; no student UI flow yet).
 
 Concept taxonomy:
 
@@ -584,7 +602,8 @@ Honest boundaries for reviewers:
   This is NOT production-grade persistent multi-user storage.
 - Deterministic diagnosis rules cover **selected C3/Python patterns**
   only; everything else uses the LLM (if configured) or the safe fallback.
-- The **Java track is not exposed** in the UI (bank placeholder only),
+- The **Java track is not exposed** in the UI (bank has the first Java
+  C3 pair since Step 21A; no student UI flow yet),
   even though Java execution works in the execution service.
 - The **problem bank covers all 8 concepts in Python** (24 problems:
   canonical + remedial + transfer per concept), but the student demo flow
@@ -677,7 +696,8 @@ Completed milestones (Steps 1–20B):
 ### PARTIALLY IMPLEMENTED
 
 - Language tracks: Python end-to-end via UI; Java executes in the sandbox
-  but has no bank content and no student UI flow.
+  and has the first bank content (Step 21A C3 canonical + transfer pair)
+  but no student UI flow yet.
 - Problem bank: 24 Python problems (C1–C8, canonical + remedial +
   transfer each); the interactive demo loop still runs the C3 slice, and
   C8 covers recursion only (no exception/complexity bank problems yet).
@@ -692,8 +712,9 @@ Completed milestones (Steps 1–20B):
 - Advanced analytics dashboard.
 - Production database persistence (durable multi-user storage).
 - Authentication (and payments).
-- Large-scale problem bank (beyond the 24-problem C1–C8 Python slice:
-  Java bank, exception/complexity C8 problems, deeper per-concept sets).
+- Large-scale problem bank (beyond the 24-problem C1–C8 Python slice plus
+  the Step 21A Java C3 pair:
+  deeper per-concept sets, exception/complexity C8 problems).
 - Full Java student UI flow.
 - Production deployment / cloud infrastructure.
 - LLM evaluation benchmarks.

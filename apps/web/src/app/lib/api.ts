@@ -256,10 +256,12 @@ export interface ProblemsResponse {
 }
 
 export const api = {
-  createSession(): Promise<SessionResponse> {
+  createSession(languageTrack?: string): Promise<SessionResponse> {
     return request<SessionResponse>("/student/sessions", {
       method: "POST",
-      body: JSON.stringify({}),
+      body: JSON.stringify(
+        languageTrack ? { language_track: languageTrack } : {},
+      ),
     });
   },
   submit(

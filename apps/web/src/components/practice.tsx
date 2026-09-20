@@ -63,12 +63,14 @@ export function CodeEditor({
   sessionReady,
   onChange,
   onSubmit,
+  language,
 }: {
   code: string;
   busy: boolean;
   sessionReady: boolean;
   onChange: (value: string) => void;
   onSubmit: () => void;
+  language?: string;
 }) {
   const handleKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
@@ -76,13 +78,14 @@ export function CodeEditor({
       onSubmit();
     }
   };
+  const langLabel = language === "java" ? "Java" : "Python";
   return (
     <Card label="Code editor">
       <label
         htmlFor="code-editor"
         className="text-sm font-medium text-zinc-700 dark:text-zinc-200"
       >
-        Your Python code
+        Your {langLabel} code
       </label>
       <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
         Press Cmd/Ctrl + Enter to submit.

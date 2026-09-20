@@ -53,11 +53,15 @@ export default function LearnPage() {
     return <Loading text="Loading the roadmap…" />;
   }
 
+  const trackLabel =
+    state.kind === "ready" && state.data.language_track === "java"
+      ? "Java"
+      : "Python";
   if (state.kind === "failed") {
     return (
       <div className="flex max-w-3xl flex-col gap-6">
         <PageHeading
-          title="Learn Python"
+          title={`Learn ${trackLabel}`}
           intro="Eight concepts, from first variables to recursion."
         />
         <Alert title="Couldn't load the roadmap.">
@@ -95,7 +99,7 @@ export default function LearnPage() {
   return (
     <div className="flex max-w-3xl flex-col gap-6">
       <PageHeading
-        title="Learn Python"
+        title={`Learn ${trackLabel}`}
         intro="Eight concepts, from first variables to recursion. Work through problems and your progress appears here — starting with loops."
       />
       {groups.map((group) => (

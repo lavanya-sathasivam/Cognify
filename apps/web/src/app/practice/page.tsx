@@ -34,10 +34,12 @@ export default function PracticePage() {
     status,
     sessionId,
     problem: sessionProblem,
+    language,
     freshNotice,
     dismissNotice,
     refresh,
     restart,
+    chooseLanguage,
   } = useSession();
   const [problem, setProblem] = useState<ProblemView | null>(null);
   const [code, setCode] = useState("");
@@ -132,6 +134,32 @@ export default function PracticePage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <div
+        className="flex flex-wrap items-center gap-2"
+        role="group"
+        aria-label="Language track"
+      >
+        <span className="text-sm text-zinc-600 dark:text-zinc-300">
+          Language:
+        </span>
+        {(["python", "java"] as const).map((track) => (
+          <SecondaryButton
+            key={track}
+            onClick={() => void chooseLanguage(track)}
+            className={
+              (problem?.language ?? language) === track
+                ? "border-teal-700 font-semibold"
+                : undefined
+            }
+          >
+            {track === "python" ? "Python" : "Java"}
+          </SecondaryButton>
+        ))}
+        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+          Switching starts a fresh {(language === "java" ? "Java" : "Python")}{" "}
+          session.
+        </span>
+      </div>
       {freshNotice && (
         <Alert tone="info" title="Fresh session started">
           <div className="mt-1 flex flex-wrap items-center gap-3">
@@ -155,6 +183,7 @@ export default function PracticePage() {
               sessionReady={sessionId !== null}
               onChange={setCode}
               onSubmit={() => void submit()}
+              language={problem.language ?? language}
             />
           )}
         </div>

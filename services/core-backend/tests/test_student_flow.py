@@ -131,8 +131,10 @@ class StudentSessionTests(unittest.TestCase):
 
     def test_language_mismatch_rejected(self):
         client = _client()
+        # Step 21B: java is now a supported track; only unknown tracks fail.
         resp = client.post("/student/sessions", json={"language_track": "java"})
-        self.assertEqual(resp.status_code, 422)
+        self.assertEqual(resp.status_code, 200, resp.text)
+        self.assertEqual(resp.json()["language_track"], "java")
         resp2 = client.post("/student/sessions", json={"language_track": "cobol"})
         self.assertEqual(resp2.status_code, 422)
 

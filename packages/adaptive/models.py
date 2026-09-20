@@ -425,13 +425,20 @@ class CurriculumInfo:
 
 @dataclass(frozen=True)
 class ProblemInfo:
-    """Problem catalog metadata (no code, no execution)."""
+    """Problem catalog metadata (no code, no execution).
+
+    Step 21B: optional ``language`` (``python``/``java``, stored lower).
+    ``None`` means language-agnostic (backward compatible): legacy
+    catalogs without language metadata match any track. Language-tagged
+    entries only match their own track (strict isolation).
+    """
 
     problem_id: str
     concept_id: str
     difficulty: int
     isomorphic_group_id: str
     variant_role: str = "canonical"
+    language: str | None = None
 
     def __post_init__(self) -> None:
         pid = _require_non_empty_str(self.problem_id, "problem_id")
@@ -449,19 +456,27 @@ class ProblemInfo:
                 f"Unknown variant_role {self.variant_role!r}. "
                 f"Use one of {list(VALID_VARIANT_ROLES)}."
             )
+        lang: str | None = None
+        if self.language is not None:
+            lang = _require_language_track(self.language)
         object.__setattr__(self, "problem_id", pid)
         object.__setattr__(self, "concept_id", norm_concept)
         object.__setattr__(self, "isomorphic_group_id", gid)
         object.__setattr__(self, "variant_role", role)
+        object.__setattr__(self, "language", lang)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data: dict[str, Any] = {
             "problem_id": self.problem_id,
             "concept_id": self.concept_id,
             "difficulty": self.difficulty,
             "isomorphic_group_id": self.isomorphic_group_id,
             "variant_role": self.variant_role,
         }
+        # Only include language when tagged (keeps legacy dicts unchanged).
+        if self.language is not None:
+            data["language"] = self.language
+        return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ProblemInfo":
@@ -475,6 +490,7 @@ class ProblemInfo:
             difficulty=data["difficulty"],
             isomorphic_group_id=data["isomorphic_group_id"],
             variant_role=data.get("variant_role", "canonical"),
+            language=data.get("language"),
         )
 
 
