@@ -174,6 +174,11 @@ export const api = {
       `/student/journey?session_id=${encodeURIComponent(sessionId)}`,
     );
   },
+  getProblem(sessionId: string, problemId: string): Promise<ProblemView> {
+    return request<ProblemView>(
+      `/student/problems/${encodeURIComponent(problemId)}?session_id=${encodeURIComponent(sessionId)}`,
+    );
+  },
 };
 
 export function friendlyError(error: unknown): string {

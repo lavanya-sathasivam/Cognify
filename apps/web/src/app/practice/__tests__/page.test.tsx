@@ -1,12 +1,16 @@
-/** Step 16 frontend tests: the learning screen vertical slice.
+/** Step 16 frontend tests, moved to the Practice route (Step 20A).
  *
- * Rendered with React Testing Library + Vitest (per the Next.js testing
- * guide); network is fully mocked, so these tests assert UI states and
- * transitions, never backend behavior (covered by core-backend tests).
+ * Same vertical slice, same assertions: rendered with React Testing
+ * Library + Vitest; network is fully mocked, so these tests assert UI
+ * states and transitions, never backend behavior (covered by
+ * core-backend tests). Pages now render inside the shared session
+ * provider + site header, exactly as the app serves them.
  */
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, test, vi } from "vitest";
-import LearnPage from "../page";
+import { SiteHeader } from "../../../components/layout";
+import { SessionProvider } from "../../../components/session";
+import PracticePage from "../page";
 
 const PROBLEM = {
   problem_id: "PY-C3-COUNT-DIV",
@@ -151,13 +155,23 @@ function mockFetch(routes: Record<string, unknown>) {
   });
 }
 
+function renderPractice() {
+  return render(
+    <SessionProvider>
+      <SiteHeader />
+      <PracticePage />
+    </SessionProvider>,
+  );
+}
+
 beforeEach(() => {
   vi.unstubAllGlobals();
+  window.localStorage.clear();
 });
 
 test("problem renders with starter code and submit", async () => {
   vi.stubGlobal("fetch", mockFetch({ "POST /student/sessions": sessionPayload() }));
-  render(<LearnPage />);
+  renderPractice();
   expect(await screen.findByText("Cognify")).toBeDefined();
   expect(await screen.findByText("Count Divisible Numbers")).toBeDefined();
   expect(await screen.findByText(/current language: Python/)).toBeDefined();
@@ -170,7 +184,7 @@ test("problem renders with starter code and submit", async () => {
 
 test("code can be edited", async () => {
   vi.stubGlobal("fetch", mockFetch({ "POST /student/sessions": sessionPayload() }));
-  render(<LearnPage />);
+  renderPractice();
   const editor = (await screen.findByLabelText(
     "Your Python code",
   )) as HTMLTextAreaElement;
@@ -186,7 +200,7 @@ test("submit shows progress then failure state with intervention", async () => {
       "POST /student/submissions": failedPayload(),
     }),
   );
-  render(<LearnPage />);
+  renderPractice();
   await screen.findByRole("button", { name: "Submit" });
   fireEvent.click(screen.getByRole("button", { name: "Submit" }));
   expect(await screen.findByText("Running…")).toBeDefined();
@@ -208,7 +222,7 @@ test("retry flow shows success and transfer continuation", async () => {
     "POST /student/submissions": passedPayload(),
   });
   vi.stubGlobal("fetch", fetchMock);
-  render(<LearnPage />);
+  renderPractice();
   await screen.findByRole("button", { name: "Submit" });
   fireEvent.click(screen.getByRole("button", { name: "Submit" }));
   expect(await screen.findByText("✓ Good improvement")).toBeDefined();
@@ -227,7 +241,7 @@ test("verified-improvement state shows message and next step", async () => {
       return { ok: true, status: 200, json: async () => body };
     }),
   );
-  render(<LearnPage />);
+  renderPractice();
   await screen.findByRole("button", { name: "Submit" });
   fireEvent.click(screen.getByRole("button", { name: "Submit" }));
   expect(await screen.findByText("✓ Verified improvement")).toBeDefined();
@@ -240,7 +254,7 @@ test("backend failure shows an error, never silent success", async () => {
     "fetch",
     mockFetch({ "POST /student/sessions": new Error("down") }),
   );
-  render(<LearnPage />);
+  renderPractice();
   expect(await screen.findByText(/Couldn't start your session/)).toBeDefined();
   expect(screen.queryByText("✓ Good improvement")).toBeNull();
 });
@@ -259,7 +273,7 @@ test("submission error surfaces the backend message", async () => {
       return { ok: true, status: 200, json: async () => sessionPayload() };
     }),
   );
-  render(<LearnPage />);
+  renderPractice();
   await screen.findByRole("button", { name: "Submit" });
   fireEvent.click(screen.getByRole("button", { name: "Submit" }));
   await waitFor(() =>

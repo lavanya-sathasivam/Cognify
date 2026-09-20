@@ -2,11 +2,13 @@
 
 **COGNIFY** is an AI-powered adaptive programming learning system that understands **WHY** a student struggles with programming concepts, provides targeted interventions based on the student's diagnosed weaknesses and learning history, and verifies whether the student actually improved.
 
-> Current state: implementation through Step 19 is complete, including the
+> Current state: implementation through Step 20A is complete, including the
 > Docker execution architecture fix (`ccfc49d fix execution service sandbox
-> architecture`), the learner-intelligence upgrade, and the C1–C8 Python
-> problem-bank expansion (24 problems, working tree clean). Step 20 has NOT
-> been started.
+> architecture`), the learner-intelligence upgrade, the C1–C8 Python
+> problem-bank expansion (24 problems), and the student-facing product
+> foundation (Home/Learn/Practice/Progress/History on existing APIs,
+> working tree clean). Step 20B (backend per-concept/history endpoints)
+> has NOT been started.
 > The full learning loop works for the Python C3 slice
 > (execution → Evidence Pack → diagnosis → learner model → intervention →
 > retry → transfer → verification → adaptive recommendation) with a
@@ -528,17 +530,21 @@ only; everything else uses the LLM (if configured) or the safe fallback.
 
 ## 18. Testing and validation
 
-Last verified results (implementation through Step 19):
+Last verified results (implementation through Step 20A):
 
 - Core backend: **170 passed**
 - Execution service: **39 passed**
 - Packages: **284 passed, 27 subtests passed** (incl. 20 new Step 19 bank tests)
-- Frontend: **7 Vitest tests passed**
+- Frontend: **33 Vitest tests passed** (7 preserved Practice tests + 26 new:
+  copy layer, Home/nav, Learn/Progress/History, humanized Practice feedback)
 - TypeScript: `npx tsc --noEmit` **passed**
 - ESLint: `npm run lint` **passed**
-- Next.js production build: `npm run build` **passed**
-- Docker/browser end-to-end (wrong → diagnosis → retry → transfer →
-  `VERIFIED_IMPROVED`): **verified successfully**
+- Next.js production build: `npm run build` **passed** (routes `/`,
+  `/learn`, `/practice`, `/progress`, `/history`)
+- Live API-level C3 journey re-verified in Step 20A against Docker
+  execution (wrong → `FAILED`/diagnosis/intervention → retry `PASSED` →
+  transfer `VERIFIED_IMPROVED` → `transfer_done`); browser click-through
+  was not performed in this step.
 
 Run suites from the repo root (venv activated):
 
@@ -602,7 +608,7 @@ This prototype intentionally does **not** include:
 
 ## 20. Current implementation status
 
-Completed milestones (Steps 1–19):
+Completed milestones (Steps 1–20A):
 
 1. Project architecture and repository structure
 2. Concept taxonomy (C1–C8)
@@ -626,6 +632,9 @@ Completed milestones (Steps 1–19):
     explanations and adaptive evidence, additive only)
 19. Problem-bank expansion to C1–C8 in Python (24 problems: canonical +
     remedial + transfer per concept)
+20A. Student product foundation (Home/Learn/Practice/Progress/History,
+    shared session, humanized copy, `?debug=1` developer view — existing
+    backend APIs only; 20B endpoints not started)
 
 ### IMPLEMENTED / VERIFIED
 
@@ -645,7 +654,12 @@ Completed milestones (Steps 1–19):
   `/student/submissions`, `/student/journey`) with CORS allowlist, code
   size limits, hidden-output redaction, and spoofed-metadata rejection.
 - Student-facing Next.js UI with Vitest coverage, clean `tsc`, `lint`, and
-  production `build`.
+  production `build`: five areas (Home, Learn, Practice, Progress,
+  History) sharing one browser session; Practice is the redesigned C3
+  coding flow (two-column, per-test results, humanized feedback, `?debug=1`
+  developer view); internal codes never appear in normal UI; Learn shows
+  the eight real concepts with honest not-started states; History is an
+  honest empty state pending backend history support (Step 20B).
 
 ### PARTIALLY IMPLEMENTED
 
@@ -671,7 +685,7 @@ Completed milestones (Steps 1–19):
 - Production deployment / cloud infrastructure.
 - LLM evaluation benchmarks.
 - Stronger isolation such as gVisor/Firecracker.
-- Step 20 and beyond.
+- Step 20B (per-concept/history backend endpoints) and beyond.
 
 ## 21. Local development / Docker run instructions
 

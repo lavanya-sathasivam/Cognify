@@ -1,388 +1,107 @@
+/** Home: "what should I do next?" (Step 20A).
+ *
+ * Built only from existing endpoints (session + journey). Shows the live
+ * C3 journey state and the stored next recommendation. No progress is
+ * fabricated for other concepts.
+ */
 "use client";
 
-/** Cognify student learning screen (Step 16 vertical slice).
- *
- * One complete flow, no chatbot: Problem -> Code -> Feedback -> Retry ->
- * Transfer -> Progress. The AI explanation is supporting information, not
- * the primary UI. All intelligence (execution, diagnosis, intervention,
- * verification, recommendations) comes from core-backend; this screen
- * only renders server-provided JSON and never invents advice.
- */
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  api,
-  friendlyError,
-  type ProblemView,
-  type SubmissionResponse,
-} from "./lib/api";
+import { useEffect } from "react";
+import Link from "next/link";
+import { useSession } from "../components/session";
+import { ContinueCard, FreshSessionNote, NextStepCard } from "../components/cards";
+import { Card, Loading, PageHeading, SecondaryButton } from "../components/ui";
 
-/** Must stay in sync with the backend cap (student.py MAX_CODE_CHARS). */
-const MAX_CODE_CHARS = 100_000;
+export default function HomePage() {
+  const {
+    status,
+    error,
+    journey,
+    session,
+    problem,
+    freshNotice,
+    dismissNotice,
+    restart,
+    refresh,
+  } = useSession();
 
-type Screen =
-  | { kind: "loading" }
-  | { kind: "ready" }
-  | { kind: "failed" };
-
-function certaintyHeading(label: string): string {
-  if (label === "likely") return "Likely cause";
-  if (label === "possible") return "Possible cause";
-  return "Not certain — one possible cause";
-}
-
-export default function LearnPage() {
-  const [screen, setScreen] = useState<Screen>({ kind: "loading" });
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [problem, setProblem] = useState<ProblemView | null>(null);
-  const [code, setCode] = useState("");
-  const [result, setResult] = useState<SubmissionResponse | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // Guards late responses: only the newest submit may update the screen.
-  const requestId = useRef(0);
-
+  // Recommendations live behind GET /student/journey; load them once the
+  // session is ready (the session payload alone carries no recommendations).
   useEffect(() => {
-    let cancelled = false;
-    api
-      .createSession()
-      .then((session) => {
-        if (cancelled) return;
-        setSessionId(session.session_id);
-        setProblem(session.problem);
-        setCode(session.problem.starter_code);
-        setScreen({ kind: "ready" });
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(friendlyError(err));
-        setScreen({ kind: "failed" });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const submit = useCallback(async () => {
-    if (!sessionId || !problem || busy) return;
-    if (!code.trim()) {
-      setError("Write some code before submitting.");
-      return;
+    if (status === "ready") {
+      void refresh();
     }
-    if (code.length > MAX_CODE_CHARS) {
-      setError(
-        `That code is too long (${code.length} characters, max ${MAX_CODE_CHARS}). Shorten it and try again.`,
-      );
-      return;
-    }
-    const mine = ++requestId.current;
-    setBusy(true);
-    setError(null);
-    try {
-      const response = await api.submit(sessionId, problem.problem_id, code);
-      if (requestId.current === mine) setResult(response);
-    } catch (err: unknown) {
-      if (requestId.current === mine) setError(friendlyError(err));
-    } finally {
-      // A stale (invalidated) response must not unlock the current request.
-      if (requestId.current === mine) setBusy(false);
-    }
-  }, [sessionId, problem, code, busy]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
-  const continueToTransfer = useCallback(() => {
-    const next = result?.transfer_problem;
-    if (!next) return;
-    requestId.current += 1; // invalidate any in-flight submit
-    setProblem(next);
-    setCode(next.starter_code);
-    setResult(null);
-    setError(null);
-  }, [result]);
+  if (status === "loading") {
+    return <Loading text="Loading your learning state…" />;
+  }
 
-  const retry = useCallback(() => {
-    requestId.current += 1; // invalidate any in-flight submit
-    setResult(null);
-    setError(null);
-  }, []);
+  if (status === "failed") {
+    return (
+      <div className="flex max-w-2xl flex-col gap-4">
+        <PageHeading title="Welcome to Cognify" />
+        <Card label="Session error">
+          <p className="font-medium">Couldn&apos;t start your session.</p>
+          <p className="mt-1 text-sm">{error ?? "Backend unreachable."}</p>
+          <div className="mt-3">
+            <SecondaryButton onClick={() => void restart()}>
+              Try again
+            </SecondaryButton>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  const journeyState =
+    journey?.journey_state ?? session?.journey_state ?? null;
+  const next = journey?.recommendations?.[0] ?? null;
 
   return (
-    <div className="flex min-h-full flex-col bg-zinc-50 text-zinc-950 dark:bg-black dark:text-zinc-50">
-      <header className="border-b border-zinc-200 bg-white px-6 py-4 dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="mx-auto flex w-full max-w-5xl items-center justify-between">
-          <h1 className="text-xl font-semibold tracking-tight">Cognify</h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            current language: Python
-          </p>
-        </div>
-      </header>
+    <div className="flex max-w-3xl flex-col gap-6">
+      <PageHeading
+        title="Welcome to Cognify"
+        intro="Practice real Python problems. Cognify runs your code, explains what went wrong, and checks that the idea sticks in a new problem."
+      />
 
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-6 py-6">
-        {screen.kind === "loading" && (
-          <p className="text-zinc-500" role="status">
-            Loading your problem…
-          </p>
-        )}
-
-        {screen.kind === "failed" && !problem && (
-          <div
-            className="rounded-lg border border-red-300 bg-red-50 p-4 text-red-900 dark:border-red-800 dark:bg-red-950 dark:text-red-100"
-            role="alert"
-          >
-            <p className="font-medium">Couldn&apos;t start your session.</p>
-            <p className="mt-1 text-sm">{error ?? "Backend unreachable."}</p>
-          </div>
-        )}
-
-        {problem && (
-          <section
-            aria-label="Problem"
-            className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950"
-          >
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h2 className="text-lg font-semibold">{problem.title}</h2>
-              <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                {problem.concept_id} · difficulty {problem.difficulty}
-              </span>
-            </div>
-            <p className="mt-3 whitespace-pre-wrap text-sm leading-6">
-              {problem.statement}
-            </p>
-            <h3 className="mt-4 text-sm font-medium">Constraints</h3>
-            <ul className="mt-1 list-disc pl-5 text-sm text-zinc-600 dark:text-zinc-300">
-              {problem.constraints.map((c) => (
-                <li key={c}>{c}</li>
-              ))}
-            </ul>
-            <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-              <div>
-                <h3 className="font-medium">Input format</h3>
-                <p className="mt-1 text-zinc-600 dark:text-zinc-300">
-                  {problem.input_format}
-                </p>
-              </div>
-              <div>
-                <h3 className="font-medium">Output format</h3>
-                <p className="mt-1 text-zinc-600 dark:text-zinc-300">
-                  {problem.output_format}
-                </p>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {problem && (
-          <section
-            aria-label="Code editor"
-            className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950"
-          >
-            <label
-              htmlFor="code-editor"
-              className="text-sm font-medium text-zinc-700 dark:text-zinc-200"
-            >
-              Your Python code
-            </label>
-            <textarea
-              id="code-editor"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              rows={14}
-              spellCheck={false}
-              className="mt-2 w-full rounded-md border border-zinc-300 bg-zinc-50 p-3 font-mono text-sm leading-5 dark:border-zinc-700 dark:bg-black"
-            />
-            <div className="mt-3 flex items-center gap-3">
-              <button
-                type="button"
-                onClick={submit}
-                disabled={busy || !sessionId}
-                className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
-              >
-                {busy ? "Running…" : "Submit"}
-              </button>
-              {busy && (
-                <span className="text-sm text-zinc-500" role="status">
-                  Executing your code against the tests…
-                </span>
-              )}
-            </div>
-          </section>
-        )}
-
-        {error && problem && (
-          <div
-            className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-900 dark:border-red-800 dark:bg-red-950 dark:text-red-100"
-            role="alert"
-          >
-            {error}
-          </div>
-        )}
-
-        {result && problem && (
-          <section
-            aria-label="Result"
-            aria-live="polite"
-            className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950"
-          >
-            <ResultPanel
-              result={result}
-              conceptId={problem.concept_id}
-              onRetry={retry}
-              onContinue={continueToTransfer}
-            />
-          </section>
-        )}
-      </main>
-    </div>
-  );
-}
-
-function ResultPanel({
-  result,
-  conceptId,
-  onRetry,
-  onContinue,
-}: {
-  result: SubmissionResponse;
-  conceptId: string;
-  onRetry: () => void;
-  onContinue: () => void;
-}) {
-  const { execution } = result;
-
-  if (result.outcome === "PASSED" && result.variant_role !== "transfer") {
-    return (
-      <div>
-        <h2 className="text-lg font-semibold">✓ Good improvement</h2>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-          All {execution.passed_count} tests pass.
-        </p>
-        {result.transfer_problem && (
-          <div className="mt-4">
-            <p className="text-sm font-medium">Try a related problem</p>
-            <button
-              type="button"
-              onClick={onContinue}
-              className="mt-2 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
-            >
-              Continue
-            </button>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (result.variant_role === "transfer" && result.verification) {
-    const verified = result.verification.outcome === "VERIFIED_IMPROVED";
-    return (
-      <div>
-        <h2 className="text-lg font-semibold">
-          {verified ? "✓ Verified improvement" : "Result recorded"}
-        </h2>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-          {result.verification.message}
-        </p>
-        {result.journey_state.mastery_claim ? (
-          <p className="mt-2 text-sm font-medium">You mastered {conceptId}.</p>
-        ) : null}
-        {result.recommendations.length > 0 && (
-          <div className="mt-4">
-            <h3 className="text-sm font-medium">Next recommended step</h3>
-            <ul className="mt-2 flex flex-col gap-2">
-              {result.recommendations.slice(0, 3).map((rec, i) => (
-                <li
-                  key={`${rec.action}-${rec.problem_id ?? i}`}
-                  className="rounded-md border border-zinc-200 p-3 text-sm dark:border-zinc-800"
-                >
-                  <p className="font-medium">{rec.action}</p>
-                  {rec.problem_title && (
-                    <p className="mt-1">Problem: {rec.problem_title}</p>
-                  )}
-                  {rec.reason && (
-                    <p className="mt-1 text-zinc-600 dark:text-zinc-300">
-                      {rec.reason}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (result.outcome === "FAILED") {
-    return (
-      <div>
-        <h2 className="text-lg font-semibold">Your code needs improvement</h2>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-          {execution.passed_count} passed · {execution.failed_count} failed
-          {execution.failed_test_id
-            ? ` · first failure on test ${execution.failed_test_id}`
-            : ""}
-        </p>
-        {result.diagnosis ? (
-          <div className="mt-4">
-            <h3 className="text-sm font-medium">Why your code failed</h3>
-            <p className="mt-1 text-sm font-medium text-zinc-700 dark:text-zinc-200">
-              {certaintyHeading(result.diagnosis.confidence_label)}:
-            </p>
-            <p className="mt-1 text-sm leading-6">{result.diagnosis.explanation}</p>
-            <h3 className="mt-4 text-sm font-medium">Evidence</h3>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-              Test {result.diagnosis.evidence_summary.failed_test_id} did not
-              produce the expected output while the other tests mostly passed,
-              which points at a single missed case rather than broken logic.
-            </p>
-          </div>
-        ) : (
-          <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-300">
-            No specific feedback is available for this run — check the error
-            below and retry.
-          </p>
-        )}
-        {result.intervention && (
-          <div className="mt-4">
-            <h3 className="text-sm font-medium">What to try</h3>
-            <p className="mt-1 text-sm leading-6">
-              {result.intervention.student_message}
-            </p>
-            <p className="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-              {result.intervention.recommended_action}
-            </p>
-          </div>
-        )}
-        <button
-          type="button"
-          onClick={onRetry}
-          className="mt-4 rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium dark:border-zinc-700"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <h2 className="text-lg font-semibold">Your code did not run cleanly</h2>
-      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-        Outcome: {result.outcome}.{" "}
-        {result.outcome === "TIMEOUT"
-          ? "Your program took too long — check for a loop that never ends."
-          : "Your program raised an error before finishing. Read the message below."}
-      </p>
-      {result.execution.stderr && (
-        <pre className="mt-3 overflow-x-auto rounded-md bg-zinc-100 p-3 font-mono text-xs dark:bg-zinc-900">
-          {result.execution.stderr.slice(0, 1000)}
-        </pre>
+      {freshNotice && (
+        <FreshSessionNote notice={freshNotice} onDismiss={dismissNotice} />
       )}
-      <button
-        type="button"
-        onClick={onRetry}
-        className="mt-4 rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium dark:border-zinc-700"
-      >
-        Retry
-      </button>
+
+      {journeyState ? (
+        <ContinueCard
+          journeyState={journeyState}
+          problemTitle={problem?.title ?? null}
+        />
+      ) : (
+        <Card label="Continue learning">
+          <p className="text-sm text-zinc-600 dark:text-zinc-300">
+            Your session is ready — head to Practice to begin.
+          </p>
+          <div className="mt-3">
+            <Link
+              href="/practice"
+              className="rounded-lg bg-teal-800 px-4 py-2 text-sm font-medium text-white dark:bg-teal-200 dark:text-teal-950"
+            >
+              Practice
+            </Link>
+          </div>
+        </Card>
+      )}
+
+      {next ? (
+        <NextStepCard recommendation={next} />
+      ) : (
+        <Card label="Recommended next">
+          <h2 className="text-base font-semibold">No recommendation yet</h2>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+            Submit a solution on the Practice page and Cognify will suggest
+            what to do next based on how it went.
+          </p>
+        </Card>
+      )}
     </div>
   );
 }
